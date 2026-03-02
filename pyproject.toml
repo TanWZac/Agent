@@ -1,0 +1,20 @@
+[project]
+name = "langgraph-notepad-rag-agent"
+version = "0.1.0"
+description = "LangGraph agent with web search and persistent notepad RAG"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "langgraph>=0.2.34",
+  "langchain>=0.3.0",
+  "langchain-openai>=0.2.0",
+  "langchain-community>=0.3.0",
+  "duckduckgo-search>=6.2.12",
+  "python-dotenv>=1.0.1"
+]
+
+[project.scripts]
+notepad-agent = "src.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
