@@ -161,3 +161,31 @@ def get_settings(**overrides: object) -> Settings:
             **overrides,
         }  # type: ignore[arg-type]
     )
+
+
+def get_rai_config():
+    """Load Responsible AI configuration from the JSON config file."""
+    from src.responsible_ai.config import RAIConfig
+
+    rai_section = _json_cfg.get("responsible_ai", {})
+    if not rai_section:
+        return RAIConfig()
+
+    return RAIConfig(
+        enabled=rai_section.get("enabled", True),
+        content_filter_enabled=rai_section.get("content_filter_enabled", True),
+        blocked_categories=rai_section.get("blocked_categories", [
+            "violence", "self_harm", "hate_speech", "sexual_content", "illegal_activity",
+        ]),
+        pii_detection_enabled=rai_section.get("pii_detection_enabled", True),
+        pii_redact_output=rai_section.get("pii_redact_output", True),
+        pii_block_input=rai_section.get("pii_block_input", False),
+        audit_enabled=rai_section.get("audit_enabled", True),
+        audit_log_file=rai_section.get("audit_log_file", "data/rai_audit.jsonl"),
+        rate_limit_enabled=rai_section.get("rate_limit_enabled", True),
+        max_messages_per_minute=rai_section.get("max_messages_per_minute", 20),
+        max_messages_per_session=rai_section.get("max_messages_per_session", 200),
+        max_output_length=rai_section.get("max_output_length", 10000),
+        disclaimer_enabled=rai_section.get("disclaimer_enabled", True),
+        disclaimer_topics=rai_section.get("disclaimer_topics", ["medical", "legal", "financial"]),
+    )

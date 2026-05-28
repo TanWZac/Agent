@@ -8,8 +8,9 @@ from langchain_core.messages import AnyMessage, HumanMessage
 
 from src.agent.graph import build_graph
 from src.agent.tools import create_tools
-from src.config import Settings, get_settings
+from src.config import Settings, get_rai_config, get_settings
 from src.core.logging import get_logger
+from src.responsible_ai.config import RAIConfig
 from src.store import NoteStore
 from src.store.factory import create_note_store
 
@@ -28,11 +29,13 @@ class AgentSession:
         settings: Settings | None = None,
         session_id: str | None = None,
         store: NoteStore | None = None,
+        rai_config: RAIConfig | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._settings.validate()
         self.session_id = session_id or str(uuid4())
         self._history: list[AnyMessage] = []
+        self._rai_config = rai_config or get_rai_config()
         self._store = store or create_note_store(
             backend=self._settings.store_backend,
             note_file=self._settings.note_file,
@@ -41,10 +44,11 @@ class AgentSession:
             persist_directory=self._settings.chroma_persist_dir,
         )
         tools = create_tools(self._store, self._settings)
-        self._graph = build_graph(self._settings, tools)
+        self._graph = build_graph(self._settings, tools, rai_config=self._rai_config)
         logger.info(
-            "Session created: id=%s, model=%s, store=%s",
-            self.session_id, self._settings.openai_model, self._settings.store_backend,
+            "Session created: id=%s, model=%s, store=%s, rai_enabled=%s",
+            self.session_id, self._settings.openai_model,
+            self._settings.store_backend, self._rai_config.enabled,
         )
 
     @property
@@ -72,7 +76,10 @@ class AgentSession:
 
         logger.info("Session %s: user message (%d chars)", self.session_id, len(user_message))
 
-        result = self._graph.invoke({"messages": list(self._history)})
+        result = self._graph.invoke({
+            "messages": list(self._history),
+            "session_id": self.session_id,
+        })
         assistant_msg = result["messages"][-1]
         assistant_text = getattr(assistant_msg, "content", str(assistant_msg))
 

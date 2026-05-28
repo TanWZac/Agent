@@ -40,5 +40,21 @@
     "level": "INFO",
     "format": "%(asctime)s | %(levelname)-8s | %(name)s.%(funcName)s | %(message)s",
     "datefmt": "%Y-%m-%dT%H:%M:%S"
+  },
+  "responsible_ai": {
+    "enabled": true,
+    "content_filter_enabled": true,
+    "blocked_categories": ["violence", "self_harm", "hate_speech", "sexual_content", "illegal_activity"],
+    "pii_detection_enabled": true,
+    "pii_redact_output": true,
+    "pii_block_input": false,
+    "audit_enabled": true,
+    "audit_log_file": "data/rai_audit.jsonl",
+    "rate_limit_enabled": true,
+    "max_messages_per_minute": 20,
+    "max_messages_per_session": 200,
+    "max_output_length": 10000,
+    "disclaimer_enabled": true,
+    "disclaimer_topics": ["medical", "legal", "financial"]
   }
 }
