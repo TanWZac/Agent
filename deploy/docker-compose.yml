@@ -1,12 +1,14 @@
 services:
   agent:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ../.env
     volumes:
-      - ./data:/app/data
+      - ../data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
