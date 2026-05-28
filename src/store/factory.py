@@ -12,7 +12,7 @@ def create_note_store(backend: str = "file", **kwargs) -> NoteStore:
     """Create a NoteStore instance for the specified backend.
 
     Args:
-        backend: One of "file" or "chroma".
+        backend: One of "file", "chroma", or "sqlite".
         **kwargs: Backend-specific configuration passed to the constructor.
 
     Raises:
@@ -32,7 +32,13 @@ def create_note_store(backend: str = "file", **kwargs) -> NoteStore:
             collection_name=kwargs.get("collection_name", "notepad"),
             persist_directory=kwargs.get("persist_directory", "data/chroma_db"),
         )
+    elif backend == "sqlite":
+        from src.store.sql_store import SqlNoteStore
+
+        return SqlNoteStore(
+            db_url=kwargs.get("db_url", "sqlite:///data/notepad.db"),
+        )
     else:
         raise ValueError(
-            f"Unknown store backend: '{backend}'. Supported: 'file', 'chroma'."
+            f"Unknown store backend: '{backend}'. Supported: 'file', 'chroma', 'sqlite'."
         )

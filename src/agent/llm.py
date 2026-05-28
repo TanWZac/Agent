@@ -1,4 +1,8 @@
-"""LLM factory — creates the appropriate LLM instance based on provider config."""
+"""
+LLM factory — creates the appropriate LLM instance based on provider config.
+
+:mod:`llm` provides a factory for instantiating LangChain-compatible LLMs based on configuration.
+"""
 
 from __future__ import annotations
 
@@ -11,17 +15,13 @@ logger = get_logger("agent.llm")
 
 
 def create_llm(settings: Settings) -> BaseChatModel:
-    """Create an LLM instance based on the configured provider.
+    """
+    Create an LLM instance based on the configured provider.
 
-    Args:
-        settings: Application settings with LLM config.
-
-    Returns:
-        A LangChain-compatible chat model.
-
-    Raises:
-        ImportError: If the required package for the provider is not installed.
-        ValueError: If the provider is not recognized.
+    :param settings: Application settings with LLM config.
+    :return: A LangChain-compatible chat model.
+    :raises ImportError: If the required package for the provider is not installed.
+    :raises ValueError: If the provider is not recognized.
     """
     provider = settings.llm_provider
 

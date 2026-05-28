@@ -1,19 +1,32 @@
-FROM python:3.11-slim AS base
+##############################################################################
+# Stage 1: Build — install dependencies in a temporary image
+##############################################################################
+FROM python:3.11-slim AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+COPY pyproject.toml requirements.lock ./
+RUN pip install --no-cache-dir --prefix=/install -r requirements.lock
 
-# Copy source
+##############################################################################
+# Stage 2: Runtime — lean production image
+##############################################################################
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application source
 COPY src/ src/
 COPY data/ data/
+COPY alembic/ alembic/
+COPY alembic.ini .
 
 # Create non-root user
 RUN useradd --create-home appuser && chown -R appuser:appuser /app

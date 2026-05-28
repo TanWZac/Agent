@@ -1,4 +1,8 @@
-"""LangGraph state graph construction for the agent."""
+"""
+LangGraph state graph construction for the agent.
+
+:mod:`graph` builds the LangGraph state machine for the agent, including responsible AI guardrails.
+"""
 
 from __future__ import annotations
 
@@ -29,20 +33,24 @@ SYSTEM_PROMPT = (
 
 
 class AgentState(TypedDict):
+    """
+    State for the agent graph.
+
+    :ivar messages: List of conversation messages.
+    :ivar session_id: Unique session identifier.
+    """
     messages: Annotated[list[AnyMessage], add_messages]
     session_id: str
 
 
 def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = None):
-    """Construct and compile the LangGraph state graph.
+    """
+    Construct and compile the LangGraph state graph.
 
-    Args:
-        settings: App settings (model config, provider selection).
-        tools: List of @tool-decorated callables.
-        rai_config: Optional Responsible AI configuration.
-
-    Returns:
-        Compiled LangGraph runnable.
+    :param settings: App settings (model config, provider selection).
+    :param tools: List of @tool-decorated callables.
+    :param rai_config: Optional Responsible AI configuration.
+    :return: Compiled LangGraph runnable.
     """
     base_llm = create_llm(settings)
     guardrails = Guardrails(config=rai_config)
@@ -59,7 +67,12 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
         llm = base_llm
 
     def input_guardrail(state: AgentState) -> AgentState:
-        """Check user input against responsible AI guardrails."""
+        """
+        Check user input against responsible AI guardrails.
+
+        :param state: Current agent state.
+        :return: Updated agent state (possibly blocked or redacted).
+        """
         messages = state["messages"]
         if not messages:
             return state
@@ -86,7 +99,12 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
         return state
 
     def input_was_blocked(state: AgentState) -> str:
-        """Route based on whether input was blocked by guardrails."""
+        """
+        Route based on whether input was blocked by guardrails.
+
+        :param state: Current agent state.
+        :return: "blocked" or "allowed".
+        """
         messages = state["messages"]
         if messages and hasattr(messages[-1], "type") and messages[-1].type == "ai":
             return "blocked"
@@ -102,7 +120,12 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
         return {"messages": [response]}
 
     def output_guardrail(state: AgentState) -> AgentState:
-        """Check assistant output against responsible AI guardrails."""
+        """
+        Check assistant output against responsible AI guardrails.
+
+        :param state: Current agent state.
+        :return: Updated agent state (possibly redacted or blocked).
+        """
         messages = state["messages"]
         if not messages:
             return state
@@ -125,7 +148,12 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
         return state
 
     def should_end_or_continue(state: AgentState):
-        """Determine if we should end, use tools, or continue."""
+        """
+        Determine if we should end, use tools, or continue.
+
+        :param state: Current agent state.
+        :return: "tools" or END.
+        """
         messages = state["messages"]
         if not messages:
             return END

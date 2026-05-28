@@ -6,10 +6,13 @@ Supports multiple concurrent sessions and an MCP server via SSE.
 
 from __future__ import annotations
 
+import os
+import secrets
 from contextlib import asynccontextmanager
 from typing import Dict
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from src.agent import AgentSession
@@ -25,6 +28,23 @@ _sessions: Dict[str, AgentSession] = {}
 
 # MCP SSE transport
 _sse_transport = create_sse_transport("/mcp")
+
+# --- API Key Authentication ---
+_API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+_API_KEY = os.getenv("API_KEY", "")
+
+
+def _verify_api_key(api_key: str | None = Security(_API_KEY_HEADER)) -> str:
+    """Validate the API key from the request header.
+
+    If API_KEY env var is not set, authentication is disabled (development mode).
+    """
+    if not _API_KEY:
+        # Auth disabled — no API_KEY configured
+        return ""
+    if not api_key or not secrets.compare_digest(api_key, _API_KEY):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return api_key
 
 
 @asynccontextmanager
@@ -83,7 +103,7 @@ async def health_check():
     return HealthResponse(status="healthy", active_sessions=len(_sessions))
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(_verify_api_key)])
 async def chat(request: ChatRequest):
     """Send a message to the agent and get a response."""
     try:
@@ -104,7 +124,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/sessions/{session_id}", response_model=SessionInfo)
+@app.get("/sessions/{session_id}", response_model=SessionInfo, dependencies=[Depends(_verify_api_key)])
 async def get_session(session_id: str):
     if session_id not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -112,7 +132,7 @@ async def get_session(session_id: str):
     return SessionInfo(session_id=session.session_id, message_count=len(session.history))
 
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/sessions/{session_id}", dependencies=[Depends(_verify_api_key)])
 async def delete_session(session_id: str):
     if session_id not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -120,7 +140,7 @@ async def delete_session(session_id: str):
     return {"detail": "Session deleted"}
 
 
-@app.post("/sessions/{session_id}/reset")
+@app.post("/sessions/{session_id}/reset", dependencies=[Depends(_verify_api_key)])
 async def reset_session(session_id: str):
     if session_id not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found")

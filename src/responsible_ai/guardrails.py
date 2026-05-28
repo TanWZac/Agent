@@ -1,4 +1,8 @@
-"""Guardrails orchestrator — coordinates all RAI checks on input/output."""
+"""
+Guardrails orchestrator — coordinates all RAI checks on input/output.
+
+:mod:`guardrails` applies content filtering, PII, bias, rate limiting, and audit logging to agent input/output.
+"""
 
 from __future__ import annotations
 
@@ -19,15 +23,15 @@ logger = get_logger("rai.guardrails")
 # Disclaimers appended when sensitive topics are discussed
 _TOPIC_DISCLAIMERS: dict[str, str] = {
     "medical": (
-        "\n\n⚕️ *Disclaimer: This is not medical advice. "
+        "\n\n*Disclaimer: This is not medical advice. "
         "Please consult a qualified healthcare professional for medical concerns.*"
     ),
     "legal": (
-        "\n\n⚖️ *Disclaimer: This is not legal advice. "
+        "\n\n*Disclaimer: This is not legal advice. "
         "Please consult a qualified legal professional for legal matters.*"
     ),
     "financial": (
-        "\n\n💰 *Disclaimer: This is not financial advice. "
+        "\n\n*Disclaimer: This is not financial advice. "
         "Please consult a qualified financial advisor for investment or financial decisions.*"
     ),
 }
@@ -41,7 +45,20 @@ _TOPIC_KEYWORDS: dict[str, list[str]] = {
 
 @dataclass
 class GuardrailResult:
-    """Result of guardrail processing."""
+    """
+    Result of guardrail processing.
+
+    :ivar allowed: Whether the message is allowed.
+    :ivar original_text: Original input/output text.
+    :ivar processed_text: Possibly redacted or modified text.
+    :ivar blocked_reason: Reason for blocking (if any).
+    :ivar pii_detected: Whether PII was detected.
+    :ivar content_flagged: Whether content filter triggered.
+    :ivar bias_detected: Whether bias was detected.
+    :ivar rate_limited: Whether rate limit was hit.
+    :ivar disclaimers_added: List of disclaimers added.
+    :ivar metadata: Additional metadata.
+    """
 
     allowed: bool
     original_text: str
@@ -56,7 +73,8 @@ class GuardrailResult:
 
 
 class Guardrails:
-    """Orchestrates all Responsible AI checks for the agent.
+    """
+    Orchestrates all Responsible AI checks for the agent.
 
     Applies content filtering, PII detection, bias evaluation, rate limiting,
     and disclaimer injection to both inputs and outputs.
@@ -83,7 +101,11 @@ class Guardrails:
         logger.info("Guardrails initialized: config=%s", self._config)
 
     def _create_audit_logger(self) -> AuditLogger:
-        """Create the appropriate audit logger backend based on config."""
+        """
+        Create the appropriate audit logger backend based on config.
+
+        :return: Configured AuditLogger instance.
+        """
         from src.responsible_ai.transparency import AzureBlobBackend, LocalFileBackend
 
         backend = None
@@ -111,14 +133,12 @@ class Guardrails:
         return self._audit
 
     def check_input(self, text: str, session_id: str = "") -> GuardrailResult:
-        """Run all input guardrails on user message.
+        """
+        Run all input guardrails on user message.
 
-        Args:
-            text: The user's input message.
-            session_id: Session identifier for audit and rate limiting.
-
-        Returns:
-            GuardrailResult with processed text or block indication.
+        :param text: The user's input message.
+        :param session_id: Session identifier for audit and rate limiting.
+        :return: GuardrailResult with processed text or block indication.
         """
         if not self._config.enabled:
             return GuardrailResult(allowed=True, original_text=text, processed_text=text)
@@ -235,14 +255,12 @@ class Guardrails:
         )
 
     def check_output(self, text: str, session_id: str = "") -> GuardrailResult:
-        """Run all output guardrails on assistant response.
+        """
+        Run all output guardrails on assistant response.
 
-        Args:
-            text: The assistant's response text.
-            session_id: Session identifier for audit.
-
-        Returns:
-            GuardrailResult with processed text (potentially with disclaimers).
+        :param text: The assistant's response text.
+        :param session_id: Session identifier for audit.
+        :return: GuardrailResult with processed text (potentially with disclaimers).
         """
         if not self._config.enabled:
             return GuardrailResult(allowed=True, original_text=text, processed_text=text)
@@ -318,7 +336,7 @@ class Guardrails:
                 # For medium severity, append a fairness notice
                 if bias_result.overall_severity == "medium":
                     processed_text += (
-                        "\n\n⚠️ *Note: This response may contain generalizations. "
+                        "\n\n*Note: This response may contain generalizations. "
                         "Individual experiences vary widely and stereotypes do not "
                         "reflect the diversity within any group.*"
                     )
@@ -348,7 +366,12 @@ class Guardrails:
         )
 
     def _is_rate_limited(self, session_id: str) -> bool:
-        """Check if session has exceeded rate limits."""
+        """
+        Check if session has exceeded rate limits.
+
+        :param session_id: Session identifier.
+        :return: True if rate limited, else False.
+        """
         now = time.time()
         self._cleanup_stale_sessions(now)
 
@@ -367,7 +390,11 @@ class Guardrails:
         return False
 
     def _cleanup_stale_sessions(self, now: float) -> None:
-        """Remove sessions with no recent activity to prevent unbounded memory growth."""
+        """
+        Remove sessions with no recent activity to prevent unbounded memory growth.
+
+        :param now: Current time (epoch seconds).
+        """
         if now - self._last_cleanup < self._cleanup_interval:
             return
         self._last_cleanup = now

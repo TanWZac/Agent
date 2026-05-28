@@ -20,6 +20,9 @@
     "chroma": {
       "collection": "notepad",
       "persist_dir": "data/chroma_db"
+    },
+    "sqlite": {
+      "db_url": "sqlite:///data/notepad.db"
     }
   },
   "retrieval": {

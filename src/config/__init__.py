@@ -95,6 +95,12 @@ class Settings:
         default_factory=lambda: os.getenv("CHROMA_PERSIST_DIR",
                                           _json_cfg.get("store", {}).get("chroma", {}).get("persist_dir", "data/chroma_db"))
     )
+    sqlite_db_url: str = field(
+        default_factory=lambda: os.getenv(
+            "SQLITE_DB_URL",
+            _json_cfg.get("store", {}).get("sqlite", {}).get("db_url", "sqlite:///data/notepad.db"),
+        )
+    )
 
     # Retrieval
     retrieval_top_k: int = field(
@@ -144,9 +150,9 @@ class Settings:
             raise ConfigurationError("OPENAI_TEMPERATURE must be between 0 and 2.")
         if self.max_note_file_size_mb < 1:
             raise ConfigurationError("MAX_NOTE_FILE_SIZE_MB must be >= 1.")
-        if self.store_backend not in ("file", "chroma"):
+        if self.store_backend not in ("file", "chroma", "sqlite"):
             raise ConfigurationError(
-                f"STORE_BACKEND must be 'file' or 'chroma', got '{self.store_backend}'."
+                f"STORE_BACKEND must be 'file', 'chroma', or 'sqlite', got '{self.store_backend}'."
             )
 
 

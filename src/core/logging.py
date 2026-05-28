@@ -1,4 +1,8 @@
-"""Structured logging setup for the application."""
+"""
+Structured logging setup for the application.
+
+:mod:`logging` provides structured logger configuration and retrieval utilities.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,12 @@ import sys
 
 
 def setup_logging(level: str = "INFO") -> logging.Logger:
-    """Configure and return the application logger."""
+    """
+    Configure and return the application logger.
+
+    :param level: Logging level as a string (e.g., "INFO").
+    :return: Configured logger instance.
+    """
     logger = logging.getLogger("notepad_agent")
 
     if logger.handlers:
@@ -29,7 +38,12 @@ def setup_logging(level: str = "INFO") -> logging.Logger:
 
 
 def get_logger(name: str | None = None) -> logging.Logger:
-    """Get a child logger for a specific module."""
+    """
+    Get a child logger for a specific module.
+
+    :param name: Optional module name for the logger.
+    :return: Child logger instance.
+    """
     base = logging.getLogger("notepad_agent")
     if name:
         return base.getChild(name)

@@ -45,7 +45,9 @@ src/
 └── store/                  # Storage backends
     ├── chroma_store.py     # ChromaDB vector store
     ├── factory.py          # Store factory
-    └── file_store.py       # File-based notepad store
+  ├── file_store.py       # File-based notepad store
+  ├── sql_store.py        # SQLite note store (SQLAlchemy)
+  └── db.py               # SQLAlchemy ORM models
 ```
 
 ## Setup
@@ -122,13 +124,30 @@ All settings are loaded from environment variables (or `.env` file):
 | `OPENAI_API_KEY` | *(required)* | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model to use |
 | `OPENAI_TEMPERATURE` | `0` | LLM temperature |
+| `STORE_BACKEND` | `file` | Storage backend: `file`, `chroma`, or `sqlite` |
 | `NOTE_FILE` | `data/notepad.txt` | Notepad file path |
+| `SQLITE_DB_URL` | `sqlite:///data/notepad.db` | SQLite connection URL |
 | `LOG_LEVEL` | `INFO` | Logging level |
 | `MAX_NOTE_FILE_SIZE_MB` | `10` | Max notepad file size |
 | `RETRIEVAL_TOP_K` | `3` | Number of notes to retrieve |
 | `WEB_SEARCH_MAX_RESULTS` | `5` | Max web search results |
 | `API_HOST` | `0.0.0.0` | API server host |
 | `API_PORT` | `8000` | API server port |
+
+## Alembic Migrations
+
+If you use `STORE_BACKEND=sqlite`, you can manage schema changes with Alembic:
+
+```bash
+# apply all migrations
+alembic upgrade head
+
+# create a new migration after model changes
+alembic revision --autogenerate -m "describe change"
+
+# rollback one migration
+alembic downgrade -1
+```
 
 ## Testing
 

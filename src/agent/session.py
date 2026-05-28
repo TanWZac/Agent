@@ -1,4 +1,8 @@
-"""Agent session — orchestrates tools, graph, and conversation history."""
+"""
+Agent session — orchestrates tools, graph, and conversation history.
+
+:mod:`session` manages a single conversational session, including message history and tool orchestration.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +22,8 @@ logger = get_logger("agent.session")
 
 
 class AgentSession:
-    """Encapsulates a single conversational session with history.
+    """
+    Encapsulates a single conversational session with history.
 
     Designed for both CLI usage and integration into web services.
     Each session maintains its own message history and can be serialized.
@@ -42,6 +47,7 @@ class AgentSession:
             max_size_mb=self._settings.max_note_file_size_mb,
             collection_name=self._settings.chroma_collection,
             persist_directory=self._settings.chroma_persist_dir,
+            db_url=self._settings.sqlite_db_url,
         )
         tools = create_tools(self._store, self._settings)
         self._graph = build_graph(self._settings, tools, rai_config=self._rai_config)
@@ -57,19 +63,21 @@ class AgentSession:
 
     @property
     def history(self) -> list[AnyMessage]:
-        """Read-only access to the conversation history."""
+        """
+        Read-only access to the conversation history.
+
+        :return: List of conversation messages.
+        """
         return list(self._history)
 
     def chat(self, user_message: str) -> str:
-        """Send a message and get the assistant's response.
+        """
+        Send a message and get the assistant's response.
 
         Maintains conversation history across calls within this session.
 
-        Args:
-            user_message: The user's input text.
-
-        Returns:
-            The assistant's response text.
+        :param user_message: The user's input text.
+        :return: The assistant's response text.
         """
         human_msg = HumanMessage(content=user_message)
         self._history.append(human_msg)
@@ -93,6 +101,8 @@ class AgentSession:
         return assistant_text
 
     def reset_history(self) -> None:
-        """Clear session history (notepad persists)."""
+        """
+        Clear session history (notepad persists).
+        """
         self._history.clear()
         logger.info("Session %s: history reset", self.session_id)
