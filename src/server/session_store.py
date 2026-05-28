@@ -3,29 +3,25 @@
 Enables horizontal scaling and crash recovery for agent sessions.
 Sessions are serialized as JSON and stored with TTL-based expiration.
 
-Configuration (env vars):
-    SESSION_STORE_BACKEND: "memory" or "redis" (default: "memory")
-    REDIS_URL: Redis connection URL (default: "redis://localhost:6379/0")
-    SESSION_TTL_HOURS: Session time-to-live in hours (default: 24)
+Configuration (via config.json / Settings):
+    session.store_backend: "memory" or "redis" (default: "memory")
+    session.redis_url: Redis connection URL (default: "redis://localhost:6379/0")
+    session.ttl_hours: Session time-to-live in hours (default: 24)
+    server.max_sessions: Maximum stored sessions (default: 1000)
 """
 
 from __future__ import annotations
 
 import json
-import os
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Any
 
+from src.config import Settings, get_settings
 from src.core.logging import get_logger
 
 logger = get_logger("server.session_store")
-
-_SESSION_STORE_BACKEND = os.getenv("SESSION_STORE_BACKEND", "memory")
-_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-_SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
-_MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "1000"))
 
 
 class SessionData:
@@ -96,9 +92,10 @@ class SessionStore(ABC):
 class MemorySessionStore(SessionStore):
     """In-memory LRU session store with size limit (default, no external deps)."""
 
-    def __init__(self, max_size: int = _MAX_SESSIONS) -> None:
+    def __init__(self, max_size: int | None = None, settings: Settings | None = None) -> None:
         self._store: OrderedDict[str, SessionData] = OrderedDict()
-        self._max_size = max_size
+        _settings = settings or get_settings()
+        self._max_size = max_size if max_size is not None else _settings.max_sessions
 
     def get(self, session_id: str) -> SessionData | None:
         if session_id in self._store:
@@ -138,7 +135,7 @@ class RedisSessionStore(SessionStore):
     Sessions are stored as JSON with TTL-based expiration.
     """
 
-    def __init__(self, redis_url: str = _REDIS_URL, ttl_hours: int = _SESSION_TTL_HOURS) -> None:
+    def __init__(self, redis_url: str | None = None, ttl_hours: int | None = None, settings: Settings | None = None) -> None:
         try:
             import redis
         except ImportError:
@@ -147,14 +144,18 @@ class RedisSessionStore(SessionStore):
                 "Install with: pip install redis"
             )
 
-        self._client = redis.from_url(redis_url, decode_responses=True)
-        self._ttl_seconds = ttl_hours * 3600
+        _settings = settings or get_settings()
+        _redis_url = redis_url or _settings.redis_url
+        _ttl_hours = ttl_hours if ttl_hours is not None else _settings.session_ttl_hours
+
+        self._client = redis.from_url(_redis_url, decode_responses=True)
+        self._ttl_seconds = _ttl_hours * 3600
         self._prefix = "agent:session:"
 
         # Verify connection
         try:
             self._client.ping()
-            logger.info("Redis session store connected: %s", redis_url)
+            logger.info("Redis session store connected: %s", _redis_url)
         except redis.ConnectionError as e:
             logger.error("Redis connection failed: %s", e)
             raise
@@ -189,12 +190,13 @@ class RedisSessionStore(SessionStore):
             self.put(data)
 
 
-def create_session_store() -> SessionStore:
+def create_session_store(settings: Settings | None = None) -> SessionStore:
     """Factory: create the session store based on configuration."""
-    if _SESSION_STORE_BACKEND == "redis":
+    _settings = settings or get_settings()
+    if _settings.session_store_backend == "redis":
         try:
-            return RedisSessionStore()
+            return RedisSessionStore(settings=_settings)
         except (ImportError, Exception) as e:
             logger.warning("Redis unavailable, falling back to memory store: %s", e)
-            return MemorySessionStore()
-    return MemorySessionStore()
+            return MemorySessionStore(settings=_settings)
+    return MemorySessionStore(settings=_settings)

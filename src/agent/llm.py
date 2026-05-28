@@ -9,8 +9,6 @@ retries with configured fallback models.
 
 from __future__ import annotations
 
-import os
-import time
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -20,10 +18,6 @@ from src.config import Settings
 from src.core.logging import get_logger
 
 logger = get_logger("agent.llm")
-
-# Fallback models (env-configurable, comma-separated)
-_FALLBACK_MODELS = os.getenv("LLM_FALLBACK_MODELS", "").split(",")
-_FALLBACK_MODELS = [m.strip() for m in _FALLBACK_MODELS if m.strip()]
 
 
 class FallbackLLM(BaseChatModel):
@@ -96,10 +90,10 @@ def create_llm(settings: Settings) -> BaseChatModel:
         )
 
         # Build fallback chain if configured
-        if _FALLBACK_MODELS:
+        if settings.llm_fallback_models:
             fallbacks = []
             model_names = [settings.openai_model]
-            for fallback_model in _FALLBACK_MODELS:
+            for fallback_model in settings.llm_fallback_models:
                 fallbacks.append(ChatOpenAI(
                     model=fallback_model,
                     temperature=settings.openai_temperature,

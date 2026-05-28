@@ -6,7 +6,6 @@ Agent session — orchestrates tools, graph, and conversation history.
 
 from __future__ import annotations
 
-import os
 from uuid import uuid4
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
@@ -20,10 +19,6 @@ from src.store import NoteStore
 from src.store.factory import create_note_store
 
 logger = get_logger("agent.session")
-
-# Conversation summarization threshold (configurable)
-_MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
-_SUMMARIZE_KEEP_RECENT = int(os.getenv("SUMMARIZE_KEEP_RECENT", "6"))
 
 
 class AgentSession:
@@ -125,7 +120,7 @@ class AgentSession:
         self._history.append(assistant_msg)
 
         # Auto-summarize if history exceeds threshold
-        if len(self._history) > _MAX_HISTORY_MESSAGES:
+        if len(self._history) > self._settings.max_history_messages:
             self._summarize_history()
 
         logger.info("Session %s: assistant response (%d chars)", self.session_id, len(assistant_text))
@@ -137,12 +132,13 @@ class AgentSession:
         Keeps the most recent messages intact and replaces older ones with a
         summary SystemMessage.
         """
-        if len(self._history) <= _SUMMARIZE_KEEP_RECENT:
+        keep_recent = self._settings.summarize_keep_recent
+        if len(self._history) <= keep_recent:
             return
 
         # Split: old messages to summarize, recent messages to keep
-        to_summarize = self._history[:-_SUMMARIZE_KEEP_RECENT]
-        recent = self._history[-_SUMMARIZE_KEEP_RECENT:]
+        to_summarize = self._history[:-keep_recent]
+        recent = self._history[-keep_recent:]
 
         # Build summary from old messages
         summary_parts = []

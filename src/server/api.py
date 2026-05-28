@@ -29,15 +29,15 @@ from src.server.mcp import create_sse_transport, mcp_server
 logger = get_logger("server.api")
 
 # --- Session Store with LRU Eviction ---
-_MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "1000"))
+_settings = get_settings()
 
 
 class _SessionStore(OrderedDict):
     """LRU session store with configurable max size."""
 
-    def __init__(self, max_size: int = _MAX_SESSIONS) -> None:
+    def __init__(self, max_size: int | None = None) -> None:
         super().__init__()
-        self._max_size = max_size
+        self._max_size = max_size if max_size is not None else _settings.max_sessions
 
     def get_or_create(self, session_id: str | None, persona: str | None = None) -> AgentSession:
         """Get existing session or create new one, evicting oldest if at capacity."""
@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
         )
     logger.info("API server starting on %s:%d", settings.api_host, settings.api_port)
     logger.info("MCP server available at %s (SSE)", settings.mcp_endpoint)
-    logger.info("Max sessions: %d", _MAX_SESSIONS)
+    logger.info("Max sessions: %d", _settings.max_sessions)
     yield
     logger.info("API server shutting down, %d active sessions", len(_sessions))
     _sessions.clear()

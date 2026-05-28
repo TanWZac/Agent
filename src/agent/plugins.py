@@ -38,11 +38,10 @@ from typing import Any
 
 from langchain_core.tools import tool
 
+from src.config import Settings, get_settings
 from src.core.logging import get_logger
 
 logger = get_logger("agent.plugins")
-
-_PLUGIN_TOOLS_FILE = os.getenv("PLUGIN_TOOLS_FILE", "config/tools.yml")
 
 # Safe math operations (no exec/eval of arbitrary code)
 _SAFE_MATH_CHARS = re.compile(r"^[\d\s\+\-\*/\.\(\)\^%]+$")
@@ -90,9 +89,10 @@ def _http_get_tool(url: str, timeout: int = 10, max_size_kb: int = 512) -> str:
 class PluginToolRegistry:
     """Registry for user-defined plugin tools loaded from YAML config."""
 
-    def __init__(self, config_path: str | None = None) -> None:
+    def __init__(self, config_path: str | None = None, settings: Settings | None = None) -> None:
         self._tools: list = []
-        self._config_path = Path(config_path or _PLUGIN_TOOLS_FILE)
+        _settings = settings or get_settings()
+        self._config_path = Path(config_path or _settings.plugin_tools_file)
 
     def load(self) -> list:
         """Load plugin tools from YAML config. Returns empty list if file doesn't exist."""
@@ -171,7 +171,7 @@ class PluginToolRegistry:
         return list(self._tools)
 
 
-def load_plugin_tools(config_path: str | None = None) -> list:
+def load_plugin_tools(config_path: str | None = None, settings: Settings | None = None) -> list:
     """Convenience function: load and return all plugin tools."""
-    registry = PluginToolRegistry(config_path)
+    registry = PluginToolRegistry(config_path, settings=settings)
     return registry.load()

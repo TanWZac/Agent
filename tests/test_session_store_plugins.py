@@ -94,25 +94,25 @@ class TestSessionData:
 class TestCreateSessionStore:
     """Tests for the factory function."""
 
-    def test_defaults_to_memory(self, monkeypatch):
-        monkeypatch.setenv("SESSION_STORE_BACKEND", "memory")
+    def test_defaults_to_memory(self):
         from src.server.session_store import create_session_store, MemorySessionStore
+        from src.config import get_settings
 
-        store = create_session_store()
+        settings = get_settings(session_store_backend="memory")
+        store = create_session_store(settings=settings)
         assert isinstance(store, MemorySessionStore)
 
-    def test_redis_fallback_to_memory(self, monkeypatch):
+    def test_redis_fallback_to_memory(self):
         """When Redis is configured but unavailable, falls back to memory."""
-        monkeypatch.setenv("SESSION_STORE_BACKEND", "redis")
-        monkeypatch.setenv("REDIS_URL", "redis://nonexistent-host:9999/0")
+        from src.server.session_store import create_session_store, MemorySessionStore
+        from src.config import get_settings
 
-        # Force re-import to pick up env
-        import importlib
-        import src.server.session_store as mod
-        importlib.reload(mod)
-
-        store = mod.create_session_store()
-        assert isinstance(store, mod.MemorySessionStore)
+        settings = get_settings(
+            session_store_backend="redis",
+            redis_url="redis://nonexistent-host:9999/0",
+        )
+        store = create_session_store(settings=settings)
+        assert isinstance(store, MemorySessionStore)
 
 
 class TestPluginRegistry:
