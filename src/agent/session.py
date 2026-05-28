@@ -128,3 +128,28 @@ class AgentSession:
         """
         self._history.clear()
         logger.info("Session %s: history reset", self.session_id)
+
+    def ingest_file(self, file_path: str) -> int:
+        """Ingest a file into the session's vector store for RAG retrieval.
+
+        The file is converted to Markdown via MarkItDown, chunked, and each
+        chunk is persisted in the note store so it can be retrieved across
+        subsequent conversation turns.
+
+        :param file_path: Path to the file to ingest.
+        :return: Number of chunks stored.
+        """
+        from src.agent.file_ingest import ingest_file_to_store
+
+        return ingest_file_to_store(file_path, self._store)
+
+    def ingest_file_bytes(self, content: bytes, filename: str) -> int:
+        """Ingest raw file bytes into the session's vector store.
+
+        :param content: Raw file bytes.
+        :param filename: Original filename.
+        :return: Number of chunks stored.
+        """
+        from src.agent.file_ingest import ingest_bytes_to_store
+
+        return ingest_bytes_to_store(content, filename, self._store)

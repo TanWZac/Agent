@@ -244,16 +244,29 @@ async def chat_with_file(
         logger.error("File conversion failed for '%s': %s", file.filename, e)
         raise HTTPException(status_code=422, detail=f"Failed to convert file: {e}") from e
 
-    # Build the prompt combining file content and user message
-    user_prompt = f"## Uploaded File: {file.filename}\n\n{markdown_content}"
-    if message.strip():
-        user_prompt += f"\n\n## User Message\n\n{message}"
-    else:
-        user_prompt += "\n\nPlease summarize and analyze the content of this file."
-
     try:
         session = _sessions.get_or_create(session_id, persona=persona)
+
+        # Persist file content into the vector store for cross-turn RAG retrieval
         loop = asyncio.get_event_loop()
+        num_chunks = await loop.run_in_executor(
+            None, session.ingest_file_bytes, content, file.filename
+        )
+        logger.info("Stored %d chunks from '%s' in session %s", num_chunks, file.filename, session.session_id)
+
+        # Build the prompt — send a summary instruction (full content is in the store)
+        if message.strip():
+            user_prompt = (
+                f"I've uploaded a file '{file.filename}' ({num_chunks} chunks stored in memory). "
+                f"Here's my question: {message}"
+            )
+        else:
+            user_prompt = (
+                f"I've uploaded a file '{file.filename}' ({num_chunks} chunks stored in memory). "
+                f"Please summarize and analyze the content of this file. "
+                f"Use the retrieve_notes tool to access the file content."
+            )
+
         response_text = await loop.run_in_executor(None, session.chat, user_prompt)
         return ChatResponse(session_id=session.session_id, response=response_text)
     except LLMError as e:

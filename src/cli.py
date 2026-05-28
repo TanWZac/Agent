@@ -66,11 +66,13 @@ def main() -> None:
 
     # If a file was provided, ingest it first
     if args.file:
-        from src.agent.file_ingest import convert_file_to_markdown
-
         try:
-            md_content = convert_file_to_markdown(args.file)
-            prompt = f"## Uploaded File: {args.file}\n\n{md_content}\n\nPlease summarize and analyze this file."
+            num_chunks = session.ingest_file(args.file)
+            print(f"File '{args.file}' ingested ({num_chunks} chunks stored for retrieval).")
+            prompt = (
+                f"I've uploaded a file '{args.file}' ({num_chunks} chunks stored in memory). "
+                f"Please summarize and analyze the content. Use the retrieve_notes tool to access it."
+            )
             response = session.chat(prompt)
             print(f"Assistant: {response}")
         except Exception as e:
