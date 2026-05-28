@@ -13,6 +13,7 @@ dist/
 build/
 *.egg
 graphify-out
+set_env.sh
 
 # Data
 data/

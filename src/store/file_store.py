@@ -20,6 +20,7 @@ class FileNoteStore(NoteStore):
 
     Notes are stored as lines in a plain text file.
     Retrieval uses cosine similarity over embeddings.
+    Embeddings are cached and incrementally updated on append.
     """
 
     def __init__(self, note_file: str = "data/notepad.txt", max_size_mb: int = 10) -> None:
@@ -28,6 +29,9 @@ class FileNoteStore(NoteStore):
         self.note_file.parent.mkdir(parents=True, exist_ok=True)
         if not self.note_file.exists():
             self.note_file.write_text("", encoding="utf-8")
+        # Embedding cache: keeps pre-computed embeddings in sync with notes
+        self._cached_notes: list[str] = []
+        self._cached_embeddings: np.ndarray | None = None
         logger.info("FileNoteStore initialized: file=%s, max_size=%dMB", self.note_file, max_size_mb)
 
     def _check_size(self) -> None:
@@ -70,8 +74,10 @@ class FileNoteStore(NoteStore):
         if not notes or not query.strip():
             return []
 
+        # Use cached embeddings; only re-embed new notes
+        note_embeddings = self._get_or_update_embeddings(notes)
+
         query_embedding = embed([query])
-        note_embeddings = embed(notes)
         scores = cosine_similarity(query_embedding[0], note_embeddings)
 
         scored: List[RetrievedNote] = []
@@ -83,6 +89,25 @@ class FileNoteStore(NoteStore):
         logger.debug("Retrieved %d candidates, returning top %d", len(scored), k)
         return scored[:k]
 
+    def _get_or_update_embeddings(self, notes: list[str]) -> np.ndarray:
+        """Return embeddings for all notes, using cache for previously seen notes."""
+        if self._cached_embeddings is not None and self._cached_notes == notes[:len(self._cached_notes)]:
+            # Notes only grew (append-only file) — embed just the new ones
+            new_notes = notes[len(self._cached_notes):]
+            if not new_notes:
+                return self._cached_embeddings
+            new_embeddings = embed(new_notes)
+            self._cached_embeddings = np.vstack([self._cached_embeddings, new_embeddings])
+            self._cached_notes = list(notes)
+            return self._cached_embeddings
+
+        # Full re-embed (file was modified externally or first call)
+        self._cached_embeddings = embed(notes)
+        self._cached_notes = list(notes)
+        return self._cached_embeddings
+
     def clear(self) -> None:
         self.note_file.write_text("", encoding="utf-8")
+        self._cached_notes = []
+        self._cached_embeddings = None
         logger.info("FileNoteStore cleared")

@@ -16,14 +16,21 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+_env_loaded = False
+
 
 def _load_env() -> None:
+    """Load .env file only once, and only outside test environments."""
+    global _env_loaded
+    if _env_loaded:
+        return
+    _env_loaded = True
+    # Skip .env loading when running under pytest (PYTEST_CURRENT_TEST is set by pytest)
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
     env_path = Path.cwd() / ".env"
     if env_path.exists():
         load_dotenv(env_path)
-
-
-_load_env()
 
 _CONFIG_PATH = Path(__file__).parent / "config.json"
 
@@ -95,6 +102,12 @@ class Settings:
         default_factory=lambda: os.getenv("CHROMA_PERSIST_DIR",
                                           _json_cfg.get("store", {}).get("chroma", {}).get("persist_dir", "data/chroma_db"))
     )
+    sqlite_db_url: str = field(
+        default_factory=lambda: os.getenv(
+            "SQLITE_DB_URL",
+            _json_cfg.get("store", {}).get("sqlite", {}).get("db_url", "sqlite:///data/notepad.db"),
+        )
+    )
 
     # Retrieval
     retrieval_top_k: int = field(
@@ -144,14 +157,32 @@ class Settings:
             raise ConfigurationError("OPENAI_TEMPERATURE must be between 0 and 2.")
         if self.max_note_file_size_mb < 1:
             raise ConfigurationError("MAX_NOTE_FILE_SIZE_MB must be >= 1.")
-        if self.store_backend not in ("file", "chroma"):
+        if self.store_backend not in ("file", "chroma", "sqlite"):
             raise ConfigurationError(
-                f"STORE_BACKEND must be 'file' or 'chroma', got '{self.store_backend}'."
+                f"STORE_BACKEND must be 'file', 'chroma', or 'sqlite', got '{self.store_backend}'."
             )
+
+    # --- Secret protection ---
+    _SECRET_FIELDS = frozenset({"openai_api_key"})
+
+    def __getstate__(self) -> dict:
+        """Exclude secret fields from pickling/serialization."""
+        state = {k: v for k, v in self.__dict__.items() if k not in self._SECRET_FIELDS}
+        for k in self._SECRET_FIELDS:
+            state[k] = "***"
+        return state
+
+    def to_safe_dict(self) -> dict:
+        """Return a dict with secrets masked — safe for logging or serialization."""
+        return {
+            f.name: ("***" if f.name in self._SECRET_FIELDS else getattr(self, f.name))
+            for f in self.__dataclass_fields__.values()
+        }
 
 
 def get_settings(**overrides: object) -> Settings:
     """Factory that creates Settings with optional overrides (useful for testing)."""
+    _load_env()
     defaults = Settings()
     if not overrides:
         return defaults
@@ -160,4 +191,45 @@ def get_settings(**overrides: object) -> Settings:
             **{f.name: getattr(defaults, f.name) for f in defaults.__dataclass_fields__.values()},
             **overrides,
         }  # type: ignore[arg-type]
+    )
+
+
+def get_rai_config():
+    """Load Responsible AI configuration from the JSON config file."""
+    from src.responsible_ai.config import RAIConfig
+
+    rai_section = _json_cfg.get("responsible_ai", {})
+    if not rai_section:
+        return RAIConfig()
+
+    return RAIConfig(
+        enabled=rai_section.get("enabled", True),
+        content_filter_enabled=rai_section.get("content_filter_enabled", True),
+        blocked_categories=rai_section.get("blocked_categories", [
+            "violence", "self_harm", "hate_speech", "sexual_content", "illegal_activity",
+        ]),
+        pii_detection_enabled=rai_section.get("pii_detection_enabled", True),
+        pii_redact_output=rai_section.get("pii_redact_output", True),
+        pii_block_input=rai_section.get("pii_block_input", False),
+        bias_evaluation_enabled=rai_section.get("bias_evaluation_enabled", True),
+        bias_severity_threshold=rai_section.get("bias_severity_threshold", "medium"),
+        bias_monitored_attributes=rai_section.get("bias_monitored_attributes", [
+            "race", "gender", "religion", "age", "disability",
+            "sexual_orientation", "nationality", "socioeconomic",
+        ]),
+        bias_block_on_high_severity=rai_section.get("bias_block_on_high_severity", True),
+        bias_warn_on_output=rai_section.get("bias_warn_on_output", True),
+        audit_enabled=rai_section.get("audit_enabled", True),
+        audit_log_file=rai_section.get("audit_log_file", "data/rai_audit.jsonl"),
+        audit_backend=rai_section.get("audit_backend", "local"),
+        audit_azure_connection_string=os.getenv("AUDIT_AZURE_CONNECTION_STRING", ""),
+        audit_azure_container=rai_section.get("audit_azure_container", "rai-audit"),
+        audit_retention_days=rai_section.get("audit_retention_days", 90),
+        audit_store_content=rai_section.get("audit_store_content", False),
+        rate_limit_enabled=rai_section.get("rate_limit_enabled", True),
+        max_messages_per_minute=rai_section.get("max_messages_per_minute", 20),
+        max_messages_per_session=rai_section.get("max_messages_per_session", 200),
+        max_output_length=rai_section.get("max_output_length", 10000),
+        disclaimer_enabled=rai_section.get("disclaimer_enabled", True),
+        disclaimer_topics=rai_section.get("disclaimer_topics", ["medical", "legal", "financial"]),
     )

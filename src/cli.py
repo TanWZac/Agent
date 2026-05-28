@@ -18,7 +18,19 @@ def main() -> None:
     parser.add_argument("--note-file", default=None, help="Path to the persistent note file")
     parser.add_argument("--serve", action="store_true", help="Start as HTTP API server")
     parser.add_argument("--log-level", default=None, help="Logging level (DEBUG, INFO, WARNING, ERROR)")
+    parser.add_argument(
+        "--persona", default=None,
+        help="Agent persona (e.g., default, research_assistant, customer_support, code_reviewer, technical_writer, data_analyst)",
+    )
+    parser.add_argument("--list-personas", action="store_true", help="List available personas and exit")
     args = parser.parse_args()
+
+    if args.list_personas:
+        from src.agent.prompts import get_persona, list_personas
+        for name in list_personas():
+            p = get_persona(name)
+            print(f"  {name:20s} — {p.description}")
+        return
 
     overrides: dict = {}
     if args.note_file:
@@ -43,12 +55,13 @@ def main() -> None:
 
     # Interactive CLI mode
     try:
-        session = AgentSession(settings=settings)
+        session = AgentSession(settings=settings, persona=args.persona)
     except ConfigurationError as e:
         logger.error("Failed to initialize agent: %s", e)
         sys.exit(1)
 
-    print("Agent ready. Type 'exit' to quit.")
+    persona_name = args.persona or "default"
+    print(f"Agent ready (persona: {persona_name}). Type 'exit' to quit.")
     while True:
         try:
             user_text = input("You: ").strip()

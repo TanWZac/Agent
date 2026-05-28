@@ -1,7 +1,10 @@
-"""Shared embedding model for semantic search across the application.
+"""
+Shared embedding model for semantic search across the application.
 
 Uses sentence-transformers with a configurable model (default: all-mpnet-base-v2).
 The model is lazy-loaded as a singleton to avoid repeated initialization.
+
+:mod:`embeddings` provides embedding and similarity utilities for semantic search.
 """
 
 from __future__ import annotations
@@ -17,7 +20,11 @@ _model = None
 
 
 def _get_model():
-    """Lazy-load the sentence-transformers model (singleton)."""
+    """
+    Lazy-load the sentence-transformers model (singleton).
+
+    :return: Loaded SentenceTransformer model.
+    """
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
@@ -32,10 +39,11 @@ def _get_model():
 
 
 def embed(texts: list[str]) -> NDArray[np.float32]:
-    """Encode a list of texts into embedding vectors.
+    """
+    Encode a list of texts into embedding vectors.
 
-    Returns:
-        NumPy array of shape (len(texts), dim) — normalized.
+    :param texts: List of input strings.
+    :return: NumPy array of shape (len(texts), dim), normalized.
     """
     if not texts:
         return np.array([], dtype=np.float32).reshape(0, 768)
@@ -47,9 +55,14 @@ def cosine_similarity(
     query_embedding: NDArray[np.float32],
     corpus_embeddings: NDArray[np.float32],
 ) -> NDArray[np.float32]:
-    """Compute cosine similarity between a query and corpus embeddings.
+    """
+    Compute cosine similarity between a query and corpus embeddings.
 
     Since embeddings are normalized, this is just a dot product.
+
+    :param query_embedding: Embedding vector for the query (1D).
+    :param corpus_embeddings: Matrix of corpus embeddings (2D).
+    :return: Similarity scores as a 1D NumPy array.
     """
     if corpus_embeddings.size == 0:
         return np.array([], dtype=np.float32)

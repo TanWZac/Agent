@@ -35,3 +35,12 @@ def test_settings_huggingface_provider_no_key_needed():
     settings = get_settings(llm_provider="huggingface", openai_api_key="")
     # Should NOT raise — HuggingFace doesn't need an OpenAI key
     settings.validate()
+
+
+def test_settings_validate_sqlite_store_backend():
+    settings = get_settings(
+        llm_provider="huggingface",
+        store_backend="sqlite",
+        openai_api_key="",
+    )
+    settings.validate()
