@@ -30,6 +30,7 @@ This project is a conversational AI agent built on [LangGraph](https://github.co
 
 - **Multi-turn conversation** with memory (session-scoped and persistent via notepad)
 - **Web search** (DuckDuckGo)
+- **File upload & ingestion** via [Microsoft MarkItDown](https://github.com/microsoft/markitdown) with chunked vector store persistence
 - **RAG over stored notes** (Jaccard similarity, ChromaDB embeddings, or SQL)
 - **Responsible AI guardrails** applied at graph edges (input/output)
 - **Three exposure surfaces**: Interactive CLI, FastAPI HTTP service, and MCP server (SSE)
@@ -146,8 +147,38 @@ Tools are LangChain `@tool`-decorated functions created by `create_tools(store, 
 | `search_web` | `query: str` | Search results string | None |
 | `save_note` | `note: str` | Confirmation string | Writes to NoteStore |
 | `retrieve_notes` | `question: str` | Formatted relevant notes | None |
+| `ingest_file` | `file_path: str` | File content as Markdown | None |
 
 Tools are **closed over** the `store` and `settings` instances at creation time.
+
+#### `file_ingest.py` — File Ingestion Pipeline
+
+Converts uploaded files to Markdown using [Microsoft MarkItDown](https://github.com/microsoft/markitdown) and chunks them for vector store persistence.
+
+**Pipeline:**
+```
+File (bytes or path)
+  │
+  ├─ Validate extension (allowlist) + file size (<50 MB)
+  │
+  ├─ MarkItDown.convert() → raw Markdown
+  │
+  ├─ chunk_text() → overlapping chunks (paragraph-aware)
+  │
+  └─ store.append() per chunk (tagged with filename + chunk index)
+```
+
+**Key functions:**
+
+| Function | Purpose |
+|----------|--------|
+| `convert_file_to_markdown(path)` | Single file → Markdown string |
+| `convert_bytes_to_markdown(bytes, name)` | Bytes → temp file → Markdown |
+| `chunk_text(text, size, overlap)` | Paragraph-aware text chunking |
+| `ingest_file_to_store(path, store)` | Full pipeline: convert + chunk + persist |
+| `ingest_bytes_to_store(bytes, name, store)` | Same but from raw bytes |
+
+**Security:** Only files with extensions in `ALLOWED_EXTENSIONS` are processed. Files are validated before conversion to prevent arbitrary file processing.
 
 #### `session.py` — Session Orchestrator
 
@@ -163,6 +194,7 @@ Responsibilities:
 2. Maintains `_history: list[AnyMessage]` for multi-turn context
 3. Invokes the graph with full history on each `.chat()` call
 4. Persists both user and assistant messages to the store for long-term RAG memory
+5. Provides `.ingest_file(path)` and `.ingest_file_bytes(bytes, name)` for file upload with vector store persistence
 
 #### `prompts.py` — Prompt Library
 
@@ -349,6 +381,21 @@ The `Settings` dataclass is frozen (immutable) after construction. It includes a
 5. LLM incorporates retrieved notes into its response
 ```
 
+### File upload lifecycle:
+
+```
+1. Client sends POST /chat/upload (multipart: file + optional message + session_id)
+2. api.py validates file extension against ALLOWED_EXTENSIONS
+3. File bytes read and converted to Markdown via MarkItDown
+4. session.ingest_file_bytes(content, filename) called:
+   a. convert_bytes_to_markdown() → temp file → MarkItDown.convert() → Markdown string
+   b. chunk_text() splits into overlapping chunks (paragraph-aware, ~1000 chars each)
+   c. Each chunk stored in NoteStore as "[File: name | Chunk N/M]\n{chunk_text}"
+5. User prompt sent to session.chat() referencing the stored file
+6. Agent uses retrieve_notes tool to access relevant chunks when answering
+7. File content persists in store — available for all subsequent turns in the session
+```
+
 ---
 
 ## State Graph Execution
@@ -410,8 +457,7 @@ Persona selection flows from entry point → `AgentSession` → `build_graph()` 
 | Layer | Mechanism |
 |-------|-----------|
 | **API Authentication** | Optional `X-API-Key` header; constant-time comparison via `secrets.compare_digest` |
-| **Input Validation** | Pydantic models with `min_length`/`max_length` constraints on `ChatRequest.message` |
-| **Content Filtering** | Regex patterns block harmful prompts before they reach the LLM |
+| **Input Validation** | Pydantic models with `min_length`/`max_length` constraints on `ChatRequest.message` || **File Upload Validation** | Extension allowlist + file size cap (50 MB default); prevents arbitrary file processing || **Content Filtering** | Regex patterns block harmful prompts before they reach the LLM |
 | **PII Protection** | Automatic detection and `[REDACTED]` replacement of emails, phones, SSN, credit cards, IPs |
 | **Rate Limiting** | Per-session sliding window prevents abuse |
 | **Audit Trail** | Every interaction logged with metadata (no raw content by default) |
@@ -447,6 +493,7 @@ Tests live in `tests/` and use `pytest`:
 |-----------|----------|
 | `test_api.py` | FastAPI endpoints (uses `httpx` async client) |
 | `test_config.py` | Settings loading, validation, env var override |
+| `test_file_ingest.py` | File conversion, chunking, store ingestion, validation |
 | `test_mcp_registry.py` | MCP tool registry and semantic search |
 | `test_notepad_rag.py` | Note storage, retrieval, RAG scoring |
 | `test_store.py` | All store backends (file, chroma, sqlite) |

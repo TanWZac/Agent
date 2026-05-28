@@ -7,6 +7,7 @@ A LangGraph-powered conversational agent with web search and persistent notepad 
 - LangGraph agent with tool-calling (GPT-4o-mini default, configurable)
 - Web search via DuckDuckGo
 - Persistent notepad with lightweight RAG retrieval (Jaccard + stop-word filtering)
+- **File upload & ingestion** via [Microsoft MarkItDown](https://github.com/microsoft/markitdown) — supports PDF, DOCX, XLSX, PPTX, HTML, images, and more
 - Multi-turn conversation memory within sessions
 - **FastAPI HTTP service** for integration into microservice architectures
 - **MCP server** (SSE transport) — expose tools to Claude Desktop, VS Code Copilot, or any MCP client
@@ -20,10 +21,11 @@ A LangGraph-powered conversational agent with web search and persistent notepad 
 src/
 ├── cli.py                  # CLI entry point
 ├── agent/                  # LangGraph agent core
+│   ├── file_ingest.py      # File upload & MarkItDown conversion
 │   ├── graph.py            # State graph with RAI guardrail nodes
 │   ├── llm.py              # LLM factory (OpenAI / HuggingFace)
 │   ├── session.py          # AgentSession — orchestrates conversation
-│   └── tools.py            # Tool definitions (search, save, retrieve)
+│   └── tools.py            # Tool definitions (search, save, retrieve, ingest_file)
 ├── config/                 # Configuration management
 │   ├── __init__.py         # Settings dataclass + loaders
 │   └── config.json         # Default configuration values
@@ -131,6 +133,7 @@ The API runs on `http://0.0.0.0:8000` by default (configurable via `API_HOST`/`A
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
 | `POST` | `/chat` | Send message, get response |
+| `POST` | `/chat/upload` | Upload a file and chat about its content |
 | `GET` | `/sessions/{id}` | Session info |
 | `DELETE` | `/sessions/{id}` | Delete session |
 | `POST` | `/sessions/{id}/reset` | Reset session history |
@@ -143,6 +146,14 @@ The API runs on `http://0.0.0.0:8000` by default (configurable via `API_HOST`/`A
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What is the weather in Berlin?"}'
+```
+
+**File upload example:**
+
+```bash
+curl -X POST http://localhost:8000/chat/upload \
+  -F "file=@report.pdf" \
+  -F "message=Summarize the key findings"
 ```
 
 ### Programmatic Integration
@@ -176,6 +187,9 @@ All settings are loaded from environment variables (or `.env` file):
 | `WEB_SEARCH_MAX_RESULTS` | `5` | Max web search results |
 | `API_HOST` | `0.0.0.0` | API server host |
 | `API_PORT` | `8000` | API server port |
+| `MAX_UPLOAD_FILE_SIZE_MB` | `50` | Max upload file size |
+| `FILE_CHUNK_SIZE` | `1000` | Chunk size for file ingestion (chars) |
+| `FILE_CHUNK_OVERLAP` | `200` | Overlap between chunks (chars) |
 
 ## Alembic Migrations
 

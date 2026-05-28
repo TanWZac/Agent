@@ -12,14 +12,15 @@ A practical guide for users who want to run, integrate, and customize the **Lang
 4. [Running the Agent (CLI)](#running-the-agent-cli)
 5. [Running as an HTTP Service](#running-as-an-http-service)
 6. [Using the API](#using-the-api)
-7. [Connecting via MCP](#connecting-via-mcp)
-8. [Choosing a Storage Backend](#choosing-a-storage-backend)
-9. [Using Agent Personas](#using-agent-personas)
-10. [Programmatic Integration](#programmatic-integration)
-11. [Running with Docker](#running-with-docker)
-12. [Database Migrations (Alembic)](#database-migrations-alembic)
-13. [Running Tests](#running-tests)
-14. [Troubleshooting](#troubleshooting)
+7. [Uploading Files](#uploading-files)
+8. [Connecting via MCP](#connecting-via-mcp)
+9. [Choosing a Storage Backend](#choosing-a-storage-backend)
+10. [Using Agent Personas](#using-agent-personas)
+11. [Programmatic Integration](#programmatic-integration)
+12. [Running with Docker](#running-with-docker)
+13. [Database Migrations (Alembic)](#database-migrations-alembic)
+14. [Running Tests](#running-tests)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -79,6 +80,9 @@ OPENAI_API_KEY=sk-...your-key-here...
 | `API_HOST` | `0.0.0.0` | API server bind address |
 | `API_PORT` | `8000` | API server port |
 | `API_KEY` | *(empty — auth disabled)* | If set, clients must send `X-API-Key` header |
+| `MAX_UPLOAD_FILE_SIZE_MB` | `50` | Maximum file upload size |
+| `FILE_CHUNK_SIZE` | `1000` | Characters per chunk for file ingestion |
+| `FILE_CHUNK_OVERLAP` | `200` | Overlap between chunks for context continuity |
 
 ---
 
@@ -176,11 +180,82 @@ curl -X POST http://localhost:8000/chat \
 | `GET` | `/health` | Health check |
 | `GET` | `/personas` | List available personas |
 | `POST` | `/chat` | Send a message |
+| `POST` | `/chat/upload` | Upload a file and chat about its content |
 | `GET` | `/sessions/{id}` | Session info |
 | `DELETE` | `/sessions/{id}` | Delete session |
 | `POST` | `/sessions/{id}/reset` | Reset session history |
 | `GET` | `/mcp` | MCP SSE endpoint |
 | `POST` | `/mcp` | MCP message endpoint |
+
+---
+
+## Uploading Files
+
+The agent supports file upload via [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Uploaded files are converted to Markdown, chunked, and persisted in the vector store for cross-turn RAG retrieval.
+
+### Supported file types
+
+PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, HTML, TXT, MD, CSV, TSV, JSON, XML, RTF, EPUB, IPYNB, WAV, MP3, JPG, PNG, GIF, BMP, TIFF, WEBP, ZIP.
+
+### Upload via CLI
+
+```bash
+# Analyze a file
+notepad-agent --file report.pdf
+
+# Then ask follow-up questions about it in the same session
+You: What were the key revenue figures mentioned in the report?
+```
+
+### Upload via API
+
+```bash
+# Upload a file with a question
+curl -X POST http://localhost:8000/chat/upload \
+  -F "file=@quarterly_report.docx" \
+  -F "message=What are the top 3 action items?"
+
+# Upload without a message (auto-summarizes)
+curl -X POST http://localhost:8000/chat/upload \
+  -F "file=@presentation.pptx"
+
+# Upload into an existing session
+curl -X POST http://localhost:8000/chat/upload \
+  -F "file=@data.xlsx" \
+  -F "message=Compare this with the previous data" \
+  -F "session_id=YOUR_SESSION_ID"
+```
+
+### Upload via Python
+
+```python
+from src.agent import AgentSession
+
+session = AgentSession()
+
+# Ingest a file into the session's vector store
+num_chunks = session.ingest_file("path/to/report.pdf")
+print(f"Stored {num_chunks} chunks")
+
+# Ask questions — the agent retrieves relevant chunks automatically
+response = session.chat("What are the main conclusions in the report?")
+```
+
+### How it works
+
+1. The file is converted to Markdown via MarkItDown
+2. The Markdown is split into overlapping chunks (configurable via `FILE_CHUNK_SIZE` and `FILE_CHUNK_OVERLAP`)
+3. Each chunk is stored in the note store with metadata: `[File: filename | Chunk N/M]`
+4. The agent uses `retrieve_notes` to find relevant chunks when answering questions
+5. File content persists across conversation turns within the session
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_UPLOAD_FILE_SIZE_MB` | `50` | Maximum allowed file size |
+| `FILE_CHUNK_SIZE` | `1000` | Target chunk size in characters |
+| `FILE_CHUNK_OVERLAP` | `200` | Overlap between consecutive chunks |
 
 ---
 
@@ -238,6 +313,7 @@ async with sse_client("http://localhost:8000/mcp") as (read, write):
 | `search_web` | Search the web via DuckDuckGo |
 | `save_note` | Save a note to persistent memory |
 | `retrieve_notes` | RAG retrieval over saved notes |
+| `ingest_file` | Convert and ingest uploaded files via MarkItDown |
 | `list_notes` | List all saved notes |
 | `clear_notes` | Clear all notes |
 
