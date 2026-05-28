@@ -6,8 +6,11 @@ Supports multiple concurrent sessions and an MCP server via SSE.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
+import time
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Dict
 
@@ -23,15 +26,43 @@ from src.server.mcp import create_sse_transport, mcp_server
 
 logger = get_logger("server.api")
 
-# In-memory session store. Replace with Redis/DB for horizontal scaling.
-_sessions: Dict[str, AgentSession] = {}
+# --- Session Store with LRU Eviction ---
+_MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "1000"))
+
+
+class _SessionStore(OrderedDict):
+    """LRU session store with configurable max size."""
+
+    def __init__(self, max_size: int = _MAX_SESSIONS) -> None:
+        super().__init__()
+        self._max_size = max_size
+
+    def get_or_create(self, session_id: str | None, persona: str | None = None) -> AgentSession:
+        """Get existing session or create new one, evicting oldest if at capacity."""
+        if session_id and session_id in self:
+            self.move_to_end(session_id)
+            return self[session_id]
+        session = AgentSession(persona=persona)
+        self[session.session_id] = session
+        self.move_to_end(session.session_id)
+        while len(self) > self._max_size:
+            evicted_id, _ = self.popitem(last=False)
+            logger.info("Evicted oldest session: %s (capacity=%d)", evicted_id, self._max_size)
+        return session
+
+
+_sessions = _SessionStore()
 
 # MCP SSE transport
 _sse_transport = create_sse_transport("/mcp")
 
 # --- API Key Authentication ---
 _API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
-_API_KEY = os.getenv("API_KEY", "")
+
+
+def _get_api_key() -> str:
+    """Read API_KEY at call time (not import time) to support hot-reload."""
+    return os.getenv("API_KEY", "")
 
 
 def _verify_api_key(api_key: str | None = Security(_API_KEY_HEADER)) -> str:
@@ -39,10 +70,11 @@ def _verify_api_key(api_key: str | None = Security(_API_KEY_HEADER)) -> str:
 
     If API_KEY env var is not set, authentication is disabled (development mode).
     """
-    if not _API_KEY:
+    configured_key = _get_api_key()
+    if not configured_key:
         # Auth disabled — no API_KEY configured
         return ""
-    if not api_key or not secrets.compare_digest(api_key, _API_KEY):
+    if not api_key or not secrets.compare_digest(api_key, configured_key):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return api_key
 
@@ -57,8 +89,14 @@ async def lifespan(app: FastAPI):
     except ConfigurationError as e:
         logger.error("Startup configuration error: %s", e)
         raise
+    if not _get_api_key():
+        logger.warning(
+            "API_KEY is not set — all endpoints are unauthenticated. "
+            "Set API_KEY env var for production deployments."
+        )
     logger.info("API server starting on %s:%d", settings.api_host, settings.api_port)
     logger.info("MCP server available at %s (SSE)", settings.mcp_endpoint)
+    logger.info("Max sessions: %d", _MAX_SESSIONS)
     yield
     logger.info("API server shutting down, %d active sessions", len(_sessions))
     _sessions.clear()
@@ -101,7 +139,15 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    return HealthResponse(status="healthy", active_sessions=len(_sessions))
+    """Health check that validates LLM connectivity."""
+    settings = get_settings()
+    status = "healthy"
+
+    # Validate LLM reachability for meaningful load balancer health
+    if settings.llm_provider == "openai" and not settings.openai_api_key:
+        status = "degraded"
+
+    return HealthResponse(status=status, active_sessions=len(_sessions))
 
 
 @app.get("/personas")
@@ -124,13 +170,11 @@ async def get_personas():
 async def chat(request: ChatRequest):
     """Send a message to the agent and get a response."""
     try:
-        if request.session_id and request.session_id in _sessions:
-            session = _sessions[request.session_id]
-        else:
-            session = AgentSession(persona=request.persona)
-            _sessions[session.session_id] = session
+        session = _sessions.get_or_create(request.session_id, persona=request.persona)
 
-        response_text = session.chat(request.message)
+        # Run synchronous LLM call in a thread to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        response_text = await loop.run_in_executor(None, session.chat, request.message)
         return ChatResponse(session_id=session.session_id, response=response_text)
 
     except LLMError as e:
@@ -166,25 +210,28 @@ async def reset_session(session_id: str):
 
 
 # --- MCP Server Endpoints (SSE) ---
+# The MCP SDK's SseServerTransport operates at the raw ASGI level.
+# We mount it via Starlette Routes for proper ASGI lifecycle management.
+
+from starlette.routing import Route
 
 
-@app.get("/mcp")
-async def mcp_sse_endpoint(request: Request):
-    """SSE endpoint for MCP clients to connect to."""
-    async with _sse_transport.connect_sse(
-        request.scope, request.receive, request._send  # type: ignore[attr-defined]
-    ) as streams:
+async def _mcp_sse_app(scope, receive, send):
+    """Raw ASGI handler for MCP SSE connections."""
+    async with _sse_transport.connect_sse(scope, receive, send) as streams:
         await mcp_server.run(
             streams[0], streams[1], mcp_server.create_initialization_options()
         )
 
 
-@app.post("/mcp")
-async def mcp_post_endpoint(request: Request):
-    """POST endpoint for MCP client messages."""
-    await _sse_transport.handle_post_message(
-        request.scope, request.receive, request._send  # type: ignore[attr-defined]
-    )
+async def _mcp_post_app(scope, receive, send):
+    """Raw ASGI handler for MCP POST messages."""
+    await _sse_transport.handle_post_message(scope, receive, send)
+
+
+# Mount as raw ASGI routes — avoids accessing private Request._send
+app.router.routes.append(Route("/mcp", endpoint=_mcp_sse_app, methods=["GET"]))
+app.router.routes.append(Route("/mcp", endpoint=_mcp_post_app, methods=["POST"]))
 
 
 def start_server() -> None:

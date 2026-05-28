@@ -16,14 +16,21 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+_env_loaded = False
+
 
 def _load_env() -> None:
+    """Load .env file only once, and only outside test environments."""
+    global _env_loaded
+    if _env_loaded:
+        return
+    _env_loaded = True
+    # Skip .env loading when running under pytest (PYTEST_CURRENT_TEST is set by pytest)
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
     env_path = Path.cwd() / ".env"
     if env_path.exists():
         load_dotenv(env_path)
-
-
-_load_env()
 
 _CONFIG_PATH = Path(__file__).parent / "config.json"
 
@@ -155,9 +162,27 @@ class Settings:
                 f"STORE_BACKEND must be 'file', 'chroma', or 'sqlite', got '{self.store_backend}'."
             )
 
+    # --- Secret protection ---
+    _SECRET_FIELDS = frozenset({"openai_api_key"})
+
+    def __getstate__(self) -> dict:
+        """Exclude secret fields from pickling/serialization."""
+        state = {k: v for k, v in self.__dict__.items() if k not in self._SECRET_FIELDS}
+        for k in self._SECRET_FIELDS:
+            state[k] = "***"
+        return state
+
+    def to_safe_dict(self) -> dict:
+        """Return a dict with secrets masked — safe for logging or serialization."""
+        return {
+            f.name: ("***" if f.name in self._SECRET_FIELDS else getattr(self, f.name))
+            for f in self.__dataclass_fields__.values()
+        }
+
 
 def get_settings(**overrides: object) -> Settings:
     """Factory that creates Settings with optional overrides (useful for testing)."""
+    _load_env()
     defaults = Settings()
     if not overrides:
         return defaults

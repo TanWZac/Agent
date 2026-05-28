@@ -290,14 +290,20 @@ class AuditLogger:
         self._backend: AuditBackend = backend or LocalFileBackend(log_file)
         self._retention_days = retention_days
         self._store_content = store_content
+        # Auto-retention: track last purge time, run every 24h on write
+        self._last_retention_check: float = time.time()
+        self._retention_interval: float = 86400.0  # 24 hours
 
     def log(self, entry: AuditEntry) -> None:
         """
         Append an audit entry via the configured backend.
 
+        Automatically applies retention policy every 24 hours.
+
         :param entry: The AuditEntry to log.
         """
         self._backend.write(entry.to_dict())
+        self._maybe_apply_retention()
 
     def log_input_check(
         self, session_id: str, text: str, is_safe: bool, details: dict[str, Any] | None = None
@@ -437,6 +443,13 @@ class AuditLogger:
         if purged:
             logger.info("Retention policy applied: purged %d entries older than %d days", purged, self._retention_days)
         return purged
+
+    def _maybe_apply_retention(self) -> None:
+        """Apply retention policy if enough time has passed since last check."""
+        now = time.time()
+        if self._retention_days > 0 and (now - self._last_retention_check) >= self._retention_interval:
+            self._last_retention_check = now
+            self.apply_retention_policy()
 
     def generate_compliance_report(
         self,

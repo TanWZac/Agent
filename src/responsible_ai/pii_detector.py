@@ -99,26 +99,39 @@ class PIIDetector:
                     original=match.group(),
                 ))
 
-        # Sort by position (descending) to redact from end to start
-        matches.sort(key=lambda m: m.start, reverse=True)
-        redacted = text
+        # Deduplicate overlapping matches: keep the longest (most specific) match
+        # when ranges overlap (e.g., SSN pattern matching a phone number)
+        matches.sort(key=lambda m: (m.start, -(m.end - m.start)))
+        deduped: list[PIIMatch] = []
         for m in matches:
+            if deduped and m.start < deduped[-1].end:
+                # Overlapping — keep whichever is longer
+                if (m.end - m.start) > (deduped[-1].end - deduped[-1].start):
+                    deduped[-1] = m
+                # else: skip this shorter/equal overlap
+            else:
+                deduped.append(m)
+
+        # Sort by position (descending) to redact from end to start
+        deduped.sort(key=lambda m: m.start, reverse=True)
+        redacted = text
+        for m in deduped:
             placeholder = _REDACTION_MAP[m.pii_type]
             redacted = redacted[:m.start] + placeholder + redacted[m.end:]
 
         # Re-sort ascending for the result
-        matches.sort(key=lambda m: m.start)
+        deduped.sort(key=lambda m: m.start)
 
-        if matches:
+        if deduped:
             logger.info(
                 "PII detected: %d instance(s) of types %s",
-                len(matches),
-                list({m.pii_type.value for m in matches}),
+                len(deduped),
+                list({m.pii_type.value for m in deduped}),
             )
 
         return PIIResult(
-            has_pii=bool(matches),
-            matches=matches,
+            has_pii=bool(deduped),
+            matches=deduped,
             redacted_text=redacted,
         )
 

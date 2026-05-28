@@ -53,10 +53,20 @@ class AgentSession:
         )
         tools = create_tools(self._store, self._settings)
         self._graph = build_graph(self._settings, tools, rai_config=self._rai_config, persona=self._persona)
+        # Prevent direct graph access — guardrails can only be bypassed by subclassing
+        self.__graph_private = self._graph
         logger.info(
             "Session created: id=%s, model=%s, store=%s, persona=%s",
             self.session_id, self._settings.openai_model,
             self._settings.store_backend, self._persona or "default",
+        )
+
+    @property
+    def graph(self):
+        """Read-only access to the compiled graph. Use .chat() for guarded invocation."""
+        raise AttributeError(
+            "Direct graph access is not permitted. Use session.chat() which "
+            "applies Responsible AI guardrails on all input/output."
         )
 
     @property
@@ -90,14 +100,24 @@ class AgentSession:
             "messages": list(self._history),
             "session_id": self.session_id,
         })
-        assistant_msg = result["messages"][-1]
+
+        messages = result.get("messages", [])
+        if not messages:
+            logger.error("Session %s: graph returned empty messages", self.session_id)
+            return "I'm sorry, I couldn't generate a response. Please try again."
+
+        # Walk backwards to find the last AI message (skip tool messages)
+        assistant_msg = None
+        for msg in reversed(messages):
+            if getattr(msg, "type", None) == "ai" and not getattr(msg, "tool_calls", None):
+                assistant_msg = msg
+                break
+        if assistant_msg is None:
+            assistant_msg = messages[-1]
+
         assistant_text = getattr(assistant_msg, "content", str(assistant_msg))
 
         self._history.append(assistant_msg)
-
-        # Persist to notepad for long-term memory
-        self._store.append(f"USER: {user_message}")
-        self._store.append(f"ASSISTANT: {assistant_text}")
 
         logger.info("Session %s: assistant response (%d chars)", self.session_id, len(assistant_text))
         return assistant_text

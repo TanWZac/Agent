@@ -155,6 +155,11 @@ class Guardrails:
                 rate_limited=True,
             )
 
+        # Record rate-limit timestamp BEFORE content checks so blocked messages
+        # still count toward the rate limit (prevents abuse via spam of blocked content)
+        if self._config.rate_limit_enabled:
+            self._record_message(session_id)
+
         processed_text = text
         pii_detected = False
         content_flagged = False
@@ -236,10 +241,6 @@ class Guardrails:
                         ),
                         bias_detected=True,
                     )
-
-        # Record rate-limit timestamp
-        if self._config.rate_limit_enabled:
-            self._record_message(session_id)
 
         # Audit log
         if self._audit:
