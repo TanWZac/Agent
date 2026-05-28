@@ -23,6 +23,7 @@ def main() -> None:
         help="Agent persona (e.g., default, research_assistant, customer_support, code_reviewer, technical_writer, data_analyst)",
     )
     parser.add_argument("--list-personas", action="store_true", help="List available personas and exit")
+    parser.add_argument("--file", default=None, help="Upload a file for the agent to analyze (uses MarkItDown)")
     args = parser.parse_args()
 
     if args.list_personas:
@@ -62,6 +63,20 @@ def main() -> None:
 
     persona_name = args.persona or "default"
     print(f"Agent ready (persona: {persona_name}). Type 'exit' to quit.")
+
+    # If a file was provided, ingest it first
+    if args.file:
+        from src.agent.file_ingest import convert_file_to_markdown
+
+        try:
+            md_content = convert_file_to_markdown(args.file)
+            prompt = f"## Uploaded File: {args.file}\n\n{md_content}\n\nPlease summarize and analyze this file."
+            response = session.chat(prompt)
+            print(f"Assistant: {response}")
+        except Exception as e:
+            logger.error("File ingestion failed: %s", e)
+            print(f"Error ingesting file: {e}")
+
     while True:
         try:
             user_text = input("You: ").strip()

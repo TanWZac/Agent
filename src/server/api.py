@@ -14,11 +14,12 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Dict
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, UploadFile, File, Form
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from src.agent import AgentSession
+from src.agent.file_ingest import convert_bytes_to_markdown, ALLOWED_EXTENSIONS
 from src.config import get_settings
 from src.core.exceptions import AgentError, ConfigurationError, LLMError
 from src.core.logging import get_logger, setup_logging
@@ -207,6 +208,60 @@ async def reset_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     _sessions[session_id].reset_history()
     return {"detail": "Session history reset"}
+
+
+# --- File Upload Endpoint ---
+
+
+@app.post("/chat/upload", dependencies=[Depends(_verify_api_key)])
+async def chat_with_file(
+    file: UploadFile = File(..., description="File to upload and convert to Markdown"),
+    message: str = Form(default="", description="Optional message about the file"),
+    session_id: str | None = Form(default=None, description="Session ID to continue a conversation"),
+    persona: str | None = Form(default=None, description="Agent persona name"),
+):
+    """Upload a file and chat about its content.
+
+    The file is converted to Markdown using MarkItDown and sent to the agent
+    along with an optional user message. Supports PDF, DOCX, XLSX, PPTX, HTML,
+    images, and many other formats.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+
+    from pathlib import Path as _Path
+    ext = _Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}",
+        )
+
+    try:
+        content = await file.read()
+        markdown_content = convert_bytes_to_markdown(content, file.filename)
+    except Exception as e:
+        logger.error("File conversion failed for '%s': %s", file.filename, e)
+        raise HTTPException(status_code=422, detail=f"Failed to convert file: {e}") from e
+
+    # Build the prompt combining file content and user message
+    user_prompt = f"## Uploaded File: {file.filename}\n\n{markdown_content}"
+    if message.strip():
+        user_prompt += f"\n\n## User Message\n\n{message}"
+    else:
+        user_prompt += "\n\nPlease summarize and analyze the content of this file."
+
+    try:
+        session = _sessions.get_or_create(session_id, persona=persona)
+        loop = asyncio.get_event_loop()
+        response_text = await loop.run_in_executor(None, session.chat, user_prompt)
+        return ChatResponse(session_id=session.session_id, response=response_text)
+    except LLMError as e:
+        logger.error("LLM error in file upload session: %s", e)
+        raise HTTPException(status_code=502, detail="LLM service unavailable") from e
+    except AgentError as e:
+        logger.error("Agent error in file upload: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # --- MCP Server Endpoints (SSE) ---
