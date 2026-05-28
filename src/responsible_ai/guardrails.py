@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.core.logging import get_logger
+from src.responsible_ai.bias_evaluator import BiasEvaluator
 from src.responsible_ai.config import RAIConfig
 from src.responsible_ai.content_filter import ContentFilter
 from src.responsible_ai.pii_detector import PIIDetector
@@ -48,6 +49,7 @@ class GuardrailResult:
     blocked_reason: str = ""
     pii_detected: bool = False
     content_flagged: bool = False
+    bias_detected: bool = False
     rate_limited: bool = False
     disclaimers_added: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -56,8 +58,8 @@ class GuardrailResult:
 class Guardrails:
     """Orchestrates all Responsible AI checks for the agent.
 
-    Applies content filtering, PII detection, rate limiting, and
-    disclaimer injection to both inputs and outputs.
+    Applies content filtering, PII detection, bias evaluation, rate limiting,
+    and disclaimer injection to both inputs and outputs.
     """
 
     def __init__(self, config: RAIConfig | None = None) -> None:
@@ -66,6 +68,10 @@ class Guardrails:
             blocked_categories=self._config.blocked_categories
         ) if self._config.content_filter_enabled else None
         self._pii_detector = PIIDetector() if self._config.pii_detection_enabled else None
+        self._bias_evaluator = BiasEvaluator(
+            monitored_attributes=self._config.bias_monitored_attributes,
+            severity_threshold=self._config.bias_severity_threshold,
+        ) if self._config.bias_evaluation_enabled else None
         self._audit = AuditLogger(
             log_file=self._config.audit_log_file
         ) if self._config.audit_enabled else None
@@ -112,6 +118,7 @@ class Guardrails:
         processed_text = text
         pii_detected = False
         content_flagged = False
+        bias_detected = False
 
         # Content filtering
         if self._content_filter:
@@ -159,6 +166,37 @@ class Guardrails:
                 # Redact PII before passing to LLM
                 processed_text = pii_result.redacted_text
 
+        # Bias evaluation on input
+        if self._bias_evaluator:
+            bias_result = self._bias_evaluator.evaluate(text)
+            if bias_result.has_bias:
+                bias_detected = True
+                if self._audit:
+                    self._audit.log_bias_detected(
+                        session_id,
+                        flags=[{
+                            "type": f.bias_type.value,
+                            "attribute": f.protected_attribute.value,
+                            "severity": f.severity,
+                        } for f in bias_result.flags],
+                        direction="input",
+                    )
+                # Block on high severity if configured
+                if (
+                    self._config.bias_block_on_high_severity
+                    and bias_result.overall_severity == "high"
+                ):
+                    return GuardrailResult(
+                        allowed=False,
+                        original_text=text,
+                        processed_text="",
+                        blocked_reason=(
+                            "Your message contains language that may be discriminatory or biased. "
+                            "Please rephrase using respectful, inclusive language."
+                        ),
+                        bias_detected=True,
+                    )
+
         # Record rate-limit timestamp
         if self._config.rate_limit_enabled:
             self._record_message(session_id)
@@ -173,6 +211,7 @@ class Guardrails:
             processed_text=processed_text,
             pii_detected=pii_detected,
             content_flagged=content_flagged,
+            bias_detected=bias_detected,
         )
 
     def check_output(self, text: str, session_id: str = "") -> GuardrailResult:
@@ -191,6 +230,7 @@ class Guardrails:
         processed_text = text
         pii_detected = False
         content_flagged = False
+        bias_detected = False
         disclaimers_added: list[str] = []
 
         # Content filtering on output
@@ -228,6 +268,41 @@ class Guardrails:
         if len(processed_text) > self._config.max_output_length:
             processed_text = processed_text[:self._config.max_output_length] + "\n\n[Response truncated for safety.]"
 
+        # Bias evaluation on output
+        if self._bias_evaluator and self._config.bias_warn_on_output:
+            bias_result = self._bias_evaluator.evaluate(processed_text)
+            if bias_result.has_bias:
+                bias_detected = True
+                if self._audit:
+                    self._audit.log_bias_detected(
+                        session_id,
+                        flags=[{
+                            "type": f.bias_type.value,
+                            "attribute": f.protected_attribute.value,
+                            "severity": f.severity,
+                        } for f in bias_result.flags],
+                        direction="output",
+                    )
+                # For high-severity bias in output, replace the response
+                if bias_result.overall_severity == "high":
+                    return GuardrailResult(
+                        allowed=False,
+                        original_text=text,
+                        processed_text=(
+                            "I need to rephrase my response to ensure it's fair and unbiased. "
+                            "Could you please rephrase your question so I can provide "
+                            "a more balanced answer?"
+                        ),
+                        bias_detected=True,
+                    )
+                # For medium severity, append a fairness notice
+                if bias_result.overall_severity == "medium":
+                    processed_text += (
+                        "\n\n⚠️ *Note: This response may contain generalizations. "
+                        "Individual experiences vary widely and stereotypes do not "
+                        "reflect the diversity within any group.*"
+                    )
+
         # Topic disclaimers
         if self._config.disclaimer_enabled:
             for topic in self._config.disclaimer_topics:
@@ -248,6 +323,7 @@ class Guardrails:
             processed_text=processed_text,
             pii_detected=pii_detected,
             content_flagged=content_flagged,
+            bias_detected=bias_detected,
             disclaimers_added=disclaimers_added,
         )
 

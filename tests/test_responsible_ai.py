@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from src.responsible_ai.bias_evaluator import BiasEvaluator, BiasType, ProtectedAttribute
 from src.responsible_ai.config import RAIConfig
 from src.responsible_ai.content_filter import ContentCategory, ContentFilter
 from src.responsible_ai.guardrails import GuardrailResult, Guardrails
@@ -253,3 +254,120 @@ class TestGuardrails:
         # s2 should still be fine
         result = g.check_input("msg1", session_id="s2")
         assert result.allowed is True
+
+    def test_bias_high_severity_input_blocked(self, tmp_path):
+        g = self._make_guardrails(tmp_path, bias_block_on_high_severity=True)
+        result = g.check_input(
+            "All immigrants are ruining this country and should be eliminated",
+            session_id="s1",
+        )
+        assert result.allowed is False
+        assert result.bias_detected is True
+        assert "discriminatory" in result.blocked_reason.lower() or "biased" in result.blocked_reason.lower()
+
+    def test_bias_medium_severity_input_allowed(self, tmp_path):
+        g = self._make_guardrails(tmp_path, bias_block_on_high_severity=True)
+        result = g.check_input(
+            "All women are naturally better at caregiving",
+            session_id="s1",
+        )
+        # Medium severity should still be allowed through (just flagged)
+        assert result.allowed is True
+        assert result.bias_detected is True
+
+    def test_bias_output_high_severity_replaced(self, tmp_path):
+        g = self._make_guardrails(tmp_path, bias_warn_on_output=True)
+        result = g.check_output(
+            "All immigrants are inferior and should be removed from society",
+            session_id="s1",
+        )
+        assert result.allowed is False
+        assert result.bias_detected is True
+
+    def test_bias_output_medium_severity_adds_notice(self, tmp_path):
+        g = self._make_guardrails(tmp_path, bias_warn_on_output=True)
+        result = g.check_output(
+            "Women are naturally better at multitasking than men",
+            session_id="s1",
+        )
+        assert result.allowed is True
+        assert result.bias_detected is True
+        assert "generalizations" in result.processed_text.lower()
+
+
+# ─── Bias Evaluator Unit Tests ───────────────────────────────────────────────
+
+
+class TestBiasEvaluator:
+    def test_no_bias_in_neutral_text(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("The weather is nice today.")
+        assert result.has_bias is False
+        assert result.flags == []
+        assert result.overall_severity == "none"
+
+    def test_sweeping_generalization_detected(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("All women are bad at math")
+        assert result.has_bias is True
+        assert any(f.bias_type == BiasType.SWEEPING_GENERALIZATION for f in result.flags)
+        assert any(f.protected_attribute == ProtectedAttribute.GENDER for f in result.flags)
+
+    def test_derogatory_language_high_severity(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("Indigenous people are primitive savages")
+        assert result.has_bias is True
+        assert result.overall_severity == "high"
+        assert any(f.bias_type == BiasType.DEROGATORY_LANGUAGE for f in result.flags)
+
+    def test_racial_stereotyping_detected(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("Asian people are naturally good at math")
+        assert result.has_bias is True
+        assert any(f.protected_attribute == ProtectedAttribute.RACE for f in result.flags)
+
+    def test_age_bias_detected(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("Old people are always bad with technology")
+        assert result.has_bias is True
+        assert any(f.protected_attribute == ProtectedAttribute.AGE for f in result.flags)
+
+    def test_religion_bias_detected(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("All muslim people are dangerous")
+        assert result.has_bias is True
+        assert any(f.protected_attribute == ProtectedAttribute.RELIGION for f in result.flags)
+
+    def test_specific_attributes_only(self):
+        # Only monitor gender, not race
+        evaluator = BiasEvaluator(monitored_attributes=["gender"])
+        result = evaluator.evaluate("All Asian people are naturally smarter")
+        assert result.has_bias is False  # Race not monitored
+
+        result = evaluator.evaluate("All women are bad drivers")
+        assert result.has_bias is True  # Gender is monitored
+
+    def test_severity_threshold_filters(self):
+        # High threshold: only high severity flags
+        evaluator = BiasEvaluator(severity_threshold="high")
+        result = evaluator.evaluate("All women are naturally better at caregiving")
+        # This is a generalization (medium severity), should not be flagged at high threshold
+        assert result.has_bias is False
+
+    def test_has_bias_shorthand(self):
+        evaluator = BiasEvaluator()
+        assert evaluator.has_bias("Hello, how are you?") is False
+        assert evaluator.has_bias("All elderly people are always confused") is True
+
+    def test_recommendation_for_high_severity(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("All immigrants are inferior and should be eliminated")
+        assert result.has_bias is True
+        assert "derogatory" in result.recommendation.lower() or "revised" in result.recommendation.lower()
+
+    def test_recommendation_for_medium_severity(self):
+        evaluator = BiasEvaluator()
+        result = evaluator.evaluate("All women always tend to be more emotional")
+        assert result.has_bias is True
+        assert "generalization" in result.recommendation.lower() or "rephras" in result.recommendation.lower()
+

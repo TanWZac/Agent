@@ -31,6 +31,22 @@ class RAIConfig:
     audit_enabled: bool = True
     audit_log_file: str = "data/rai_audit.jsonl"
 
+    # Bias & fairness
+    bias_evaluation_enabled: bool = True
+    bias_severity_threshold: str = "medium"  # "low", "medium", "high"
+    bias_monitored_attributes: list[str] = field(default_factory=lambda: [
+        "race",
+        "gender",
+        "religion",
+        "age",
+        "disability",
+        "sexual_orientation",
+        "nationality",
+        "socioeconomic",
+    ])
+    bias_block_on_high_severity: bool = True
+    bias_warn_on_output: bool = True
+
     # Rate limiting (per session)
     rate_limit_enabled: bool = True
     max_messages_per_minute: int = 20

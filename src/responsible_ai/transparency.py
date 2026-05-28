@@ -90,6 +90,17 @@ class AuditLogger:
             details={"categories": categories, "direction": direction},
         ))
 
+    def log_bias_detected(
+        self, session_id: str, flags: list[dict], direction: str = "input"
+    ) -> None:
+        """Log a bias/fairness detection event."""
+        self.log(AuditEntry(
+            session_id=session_id,
+            event_type="bias_detected",
+            flagged=True,
+            details={"flags": flags, "direction": direction},
+        ))
+
     def log_rate_limited(self, session_id: str) -> None:
         """Log a rate limiting event."""
         self.log(AuditEntry(
