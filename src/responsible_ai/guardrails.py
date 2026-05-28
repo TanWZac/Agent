@@ -72,15 +72,33 @@ class Guardrails:
             monitored_attributes=self._config.bias_monitored_attributes,
             severity_threshold=self._config.bias_severity_threshold,
         ) if self._config.bias_evaluation_enabled else None
-        self._audit = AuditLogger(
-            log_file=self._config.audit_log_file
-        ) if self._config.audit_enabled else None
+        self._audit = self._create_audit_logger() if self._config.audit_enabled else None
 
         # Rate limiting state: session_id -> list of timestamps
         self._message_timestamps: dict[str, list[float]] = defaultdict(list)
         self._message_counts: dict[str, int] = defaultdict(int)
 
         logger.info("Guardrails initialized: config=%s", self._config)
+
+    def _create_audit_logger(self) -> AuditLogger:
+        """Create the appropriate audit logger backend based on config."""
+        from src.responsible_ai.transparency import AzureBlobBackend, LocalFileBackend
+
+        backend = None
+        if self._config.audit_backend == "azure_blob" and self._config.audit_azure_connection_string:
+            backend = AzureBlobBackend(
+                connection_string=self._config.audit_azure_connection_string,
+                container_name=self._config.audit_azure_container,
+            )
+        else:
+            backend = LocalFileBackend(log_file=self._config.audit_log_file)
+
+        return AuditLogger(
+            log_file=self._config.audit_log_file,
+            backend=backend,
+            retention_days=self._config.audit_retention_days,
+            store_content=self._config.audit_store_content,
+        )
 
     @property
     def config(self) -> RAIConfig:

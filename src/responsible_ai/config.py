@@ -30,6 +30,11 @@ class RAIConfig:
     # Transparency & audit
     audit_enabled: bool = True
     audit_log_file: str = "data/rai_audit.jsonl"
+    audit_backend: str = "local"  # "local" or "azure_blob"
+    audit_azure_connection_string: str = ""  # Set via env var AUDIT_AZURE_CONNECTION_STRING
+    audit_azure_container: str = "rai-audit"
+    audit_retention_days: int = 90  # Auto-purge after N days (0 = keep forever)
+    audit_store_content: bool = False  # NEVER store raw content by default (ethical)
 
     # Bias & fairness
     bias_evaluation_enabled: bool = True

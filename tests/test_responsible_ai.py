@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -126,9 +127,42 @@ class TestAuditLogger:
 
         entries = audit.get_recent_entries()
         assert len(entries) == 1
-        assert entries[0]["session_id"] == "session-1"
+        # Session ID is hashed — not stored in plaintext
+        assert entries[0]["session_hash"] != "session-1"
+        assert len(entries[0]["session_hash"]) == 16  # Truncated SHA-256
         assert entries[0]["event_type"] == "input_check"
         assert entries[0]["flagged"] is False
+        # Content is NOT stored — only length and fingerprint
+        assert "hello world" not in json.dumps(entries[0])
+        assert entries[0]["content_length"] == 11
+
+    def test_no_raw_content_stored(self, tmp_path):
+        """Verify that raw user content is NEVER persisted."""
+        log_file = str(tmp_path / "audit.jsonl")
+        audit = AuditLogger(log_file=log_file)
+        sensitive_text = "My SSN is 123-45-6789 and my email is user@secret.com"
+        audit.log_input_check("s1", sensitive_text, is_safe=False)
+
+        # Read the raw file to verify no content leaked
+        raw = Path(log_file).read_text()
+        assert "123-45-6789" not in raw
+        assert "user@secret.com" not in raw
+        assert sensitive_text not in raw
+
+    def test_session_id_anonymized(self, tmp_path):
+        """Verify session IDs are one-way hashed."""
+        log_file = str(tmp_path / "audit.jsonl")
+        audit = AuditLogger(log_file=log_file)
+        audit.log_input_check("real-session-abc123", "test", is_safe=True)
+
+        raw = Path(log_file).read_text()
+        assert "real-session-abc123" not in raw
+
+        entries = audit.get_recent_entries()
+        # Same session always produces same hash (deterministic)
+        audit.log_input_check("real-session-abc123", "test2", is_safe=True)
+        entries = audit.get_recent_entries()
+        assert entries[0]["session_hash"] == entries[1]["session_hash"]
 
     def test_log_content_blocked(self, tmp_path):
         log_file = str(tmp_path / "audit.jsonl")
@@ -148,6 +182,7 @@ class TestAuditLogger:
         entries = audit.get_recent_entries()
         assert len(entries) == 1
         assert entries[0]["details"]["pii_types"] == ["email", "phone"]
+        assert entries[0]["details"]["pii_count"] == 2
 
     def test_get_recent_entries_limit(self, tmp_path):
         log_file = str(tmp_path / "audit.jsonl")
@@ -157,6 +192,60 @@ class TestAuditLogger:
 
         entries = audit.get_recent_entries(n=5)
         assert len(entries) == 5
+
+    def test_retention_policy_purges_old_entries(self, tmp_path):
+        log_file = str(tmp_path / "audit.jsonl")
+        audit = AuditLogger(log_file=log_file, retention_days=1)
+
+        # Write an entry with a timestamp 2 days ago
+        old_entry = AuditEntry(
+            timestamp=time.time() - 200000,  # ~2.3 days ago
+            session_hash="old",
+            event_type="input_check",
+            flagged=False,
+        )
+        audit.log(old_entry)
+        # Write a recent entry
+        audit.log_input_check("recent", "hi", is_safe=True)
+
+        assert len(audit.get_recent_entries()) == 2
+        purged = audit.apply_retention_policy()
+        assert purged == 1
+        entries = audit.get_recent_entries()
+        assert len(entries) == 1
+        assert entries[0]["session_hash"] != "old"
+
+    def test_compliance_report_generation(self, tmp_path):
+        log_file = str(tmp_path / "audit.jsonl")
+        audit = AuditLogger(log_file=log_file)
+
+        # Simulate various events
+        audit.log_input_check("s1", "hello", is_safe=True)
+        audit.log_input_check("s2", "hi", is_safe=True)
+        audit.log_content_blocked("s1", ["violence"], direction="input")
+        audit.log_pii_detected("s1", ["email"], direction="input")
+        audit.log_bias_detected("s2", [{"type": "stereotyping", "attribute": "gender", "severity": "medium"}], direction="output")
+
+        report = audit.generate_compliance_report(days=30)
+
+        # Verify report structure
+        assert "report_metadata" in report
+        assert "summary" in report
+        assert "content_safety" in report
+        assert "bias_and_fairness" in report
+        assert "privacy_protection" in report
+        assert "retention_policy" in report
+
+        # Verify no user content in report
+        assert report["report_metadata"]["privacy_note"]
+        assert "aggregate statistics only" in report["report_metadata"]["privacy_note"].lower()
+
+        # Verify metrics
+        assert report["summary"]["total_interactions_checked"] == 5
+        assert report["summary"]["total_flags_raised"] == 3
+        assert report["content_safety"]["total_blocked"] == 1
+        assert report["bias_and_fairness"]["total_bias_flags"] == 1
+        assert report["privacy_protection"]["pii_detections"] == 1
 
 
 # ─── Guardrails Integration Tests ───────────────────────────────────────────
