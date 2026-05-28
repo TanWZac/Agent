@@ -197,9 +197,12 @@ Output → Content Filter → PII Redactor → Bias Evaluator → Disclaimer Inj
 | Component | File | Purpose |
 |-----------|------|---------|
 | `Guardrails` | `guardrails.py` | Orchestrator — wires all checks together |
-| `ContentFilter` | `content_filter.py` | Regex-based detection of harmful content (violence, self-harm, hate, sexual, illegal) with Unicode normalization and leetspeak reversal |
+| `ContentFilter` | `content_filter.py` | Regex-based detection of harmful content (violence, self-harm, hate, sexual, illegal) with Unicode normalization, leetspeak reversal, and jailbreak pattern detection (DAN, roleplay, delimiter injection, etc.) |
 | `PIIDetector` | `pii_detector.py` | Regex patterns for email, phone, SSN, credit cards, IP addresses — redacts with `[REDACTED]` |
 | `BiasEvaluator` | `bias_evaluator.py` | Keyword-based bias/stereotype detection across race, gender, religion, age, etc. |
+| `NemoContentRail` | `nemo_rails.py` | NeMo Guardrails LLM-as-judge safety checks using Colang self-check input/output flows |
+| `FairnessEvaluator` | `fairness.py` | Fairlearn-powered statistical fairness metrics (demographic parity via MetricFrame, selection rate analysis) |
+| `TestSetValidator` | `testset_validator.py` | Embedding-based coherence validation of (prompt, output, reference) triples before bias/fairness evaluation. Uses cosine similarity with configurable threshold (default 0.4) and max invalid ratio (default 20%) |
 | `AuditLogger` | `transparency.py` | Privacy-preserving JSONL audit trail (local file or Azure Blob) with configurable retention |
 | `RAIConfig` | `config.py` | Immutable dataclass with toggles for every feature; factory `rai_config_from_env()` for env var configuration |
 
@@ -210,6 +213,38 @@ When the LLM output discusses medical, legal, or financial topics (detected by k
 #### Rate Limiting
 
 Per-session sliding-window rate limiter with automatic cleanup of stale sessions (>1 hour inactive).
+
+#### Test Set Validation (`testset_validator.py`)
+
+Before running bias or fairness evaluation on a user-supplied dataset, `TestSetValidator` ensures the (prompt, output, reference) triples are semantically coherent:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│   User provides: prompts[], outputs[], references[]           │
+└──────────────────────────────┬────────────────────────────────┘
+                               │
+                               ▼
+┌───────────────────────────────────────────────────────────────┐
+│   Embed all three columns via sentence-transformers           │
+│   (shared singleton model from src/core/embeddings.py)        │
+└──────────────────────────────┬────────────────────────────────┘
+                               │
+                               ▼
+┌───────────────────────────────────────────────────────────────┐
+│   Per-row pairwise cosine similarity:                         │
+│     • prompt ↔ output                                         │
+│     • prompt ↔ reference                                      │
+│     • output ↔ reference                                      │
+└──────────────────────────────┬────────────────────────────────┘
+                               │
+                               ▼
+┌───────────────────────────────────────────────────────────────┐
+│   Flag rows where ANY pair < threshold (default 0.4)          │
+│   Reject dataset if invalid_rows / total > max_ratio (20%)    │
+└───────────────────────────────────────────────────────────────┘
+```
+
+Returns a `ValidationReport` with per-row scores, aggregate means, and a human-readable summary. The `filter_valid_rows()` convenience method returns only coherent rows for downstream evaluation.
 
 ---
 
@@ -415,6 +450,8 @@ Tests live in `tests/` and use `pytest`:
 | `test_mcp_registry.py` | MCP tool registry and semantic search |
 | `test_notepad_rag.py` | Note storage, retrieval, RAG scoring |
 | `test_store.py` | All store backends (file, chroma, sqlite) |
+| `test_redteam.py` | Adversarial red-team attacks (jailbreak, injection, evasion) |
+| `test_testset_validator.py` | Test set relevancy validation (matching/mismatched rows, filtering) |
 
 Tests use in-memory/temp fixtures to avoid side effects. CI enforces a minimum 70% coverage gate.
 

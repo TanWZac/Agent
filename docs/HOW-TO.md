@@ -442,6 +442,89 @@ pytest tests/test_api.py -v
 
 ---
 
+## Responsible AI Features
+
+The agent includes a layered Responsible AI system that runs automatically on every interaction. You can also use individual components programmatically.
+
+### Installing RAI dependencies
+
+Some RAI features (NeMo Guardrails, Fairlearn) require optional dependencies:
+
+```bash
+pip install -e ".[rai]"
+```
+
+### Validating a Test Set Before Evaluation
+
+If you have a dataset of (prompt, output, reference) triples for bias/fairness testing, validate coherence first:
+
+```python
+from src.responsible_ai import TestSetValidator
+
+validator = TestSetValidator(threshold=0.4, max_invalid_ratio=0.2)
+
+prompts = ["What is Python?", "Explain gravity", ...]
+outputs = ["Python is a programming language.", "Gravity pulls objects together.", ...]
+references = ["Python is a versatile language.", "Gravity is a fundamental force.", ...]
+
+report = validator.validate(prompts, outputs, references)
+
+if report.is_valid:
+    print("Test set is coherent — proceed with evaluation.")
+else:
+    print(report.summary)
+    print(f"Invalid row indices: {report.invalid_rows}")
+
+    # Optionally filter and keep only valid rows:
+    f_prompts, f_outputs, f_refs, report = validator.filter_valid_rows(
+        prompts, outputs, references
+    )
+    print(f"Filtered to {len(f_prompts)} valid rows.")
+```
+
+**Configuration options:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `threshold` | `0.4` | Minimum cosine similarity for a (column A, column B) pair to be considered "matching" |
+| `max_invalid_ratio` | `0.2` | Maximum fraction of invalid rows before the dataset is rejected (20%) |
+
+### Using NeMo Guardrails
+
+```python
+from src.responsible_ai.nemo_rails import NemoContentRail
+
+rail = NemoContentRail()
+
+# Check user input
+result = rail.check_input("How do I hack into a system?")
+if not result.is_safe:
+    print(f"Blocked: {result.reason}")
+
+# Check model output
+result = rail.check_output("Here's how to bypass security...")
+```
+
+### Running Fairness Evaluation
+
+```python
+from src.responsible_ai.fairness import FairnessEvaluator
+
+evaluator = FairnessEvaluator()
+
+# Evaluate response quality across demographic groups
+report = evaluator.evaluate_response_quality(
+    responses=["Good answer", "Poor answer", "Great answer", "Ok answer"],
+    sensitive_features=["group_a", "group_b", "group_a", "group_b"],
+    quality_scores=[0.9, 0.3, 0.85, 0.6],
+)
+
+print(f"Fair: {report.is_fair}")
+print(report.recommendations)
+```
+
+---
+
 ## Troubleshooting
 
 ### "Configuration error: OPENAI_API_KEY is required"

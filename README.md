@@ -34,9 +34,12 @@ src/
 ├── responsible_ai/         # Responsible AI guardrails
 │   ├── bias_evaluator.py   # Bias & fairness detection
 │   ├── config.py           # RAI configuration
-│   ├── content_filter.py   # Harmful content detection
+│   ├── content_filter.py   # Harmful content + jailbreak detection
+│   ├── fairness.py         # Fairlearn statistical fairness metrics
 │   ├── guardrails.py       # Orchestrator (input/output checks)
+│   ├── nemo_rails.py       # NeMo Guardrails content safety
 │   ├── pii_detector.py     # PII detection & redaction
+│   ├── testset_validator.py# Test set relevancy validation
 │   └── transparency.py     # Privacy-preserving audit logger
 ├── server/                 # Service layer
 │   ├── api.py              # FastAPI HTTP service
@@ -48,6 +51,46 @@ src/
   ├── file_store.py       # File-based notepad store
   ├── sql_store.py        # SQLite note store (SQLAlchemy)
   └── db.py               # SQLAlchemy ORM models
+```
+
+## Responsible AI
+
+The agent ships with a comprehensive **Responsible AI** layer that wraps every interaction:
+
+| Component | Description |
+|-----------|-------------|
+| **Content Filter** | Regex-based detection of harmful content, jailbreak attempts, and prompt injection |
+| **PII Detector** | Identifies and redacts emails, phone numbers, SSNs, credit cards, and IP addresses |
+| **Bias Evaluator** | Keyword-based bias/stereotype detection across protected categories |
+| **NeMo Guardrails** | LLM-as-judge content safety via NVIDIA NeMo Guardrails (Colang flows) |
+| **Fairlearn Integration** | Statistical fairness metrics (demographic parity, selection rate) for model outputs |
+| **Test Set Validator** | Embedding-based coherence check for evaluation datasets before bias/fairness testing |
+| **Audit Logger** | Privacy-preserving JSONL audit trail with configurable retention |
+
+### Test Set Validation
+
+Before running bias or fairness evaluation on a user-provided test set, validate that the (prompt, output, reference) triples are semantically coherent:
+
+```python
+from src.responsible_ai import TestSetValidator
+
+validator = TestSetValidator(threshold=0.4, max_invalid_ratio=0.2)
+report = validator.validate(prompts, outputs, references)
+
+if not report.is_valid:
+    print(report.summary)
+    print(f"Invalid rows: {report.invalid_rows}")
+
+# Or filter and proceed with only valid rows:
+f_prompts, f_outputs, f_refs, report = validator.filter_valid_rows(
+    prompts, outputs, references
+)
+```
+
+Install optional RAI dependencies:
+
+```bash
+pip install -e ".[rai]"
 ```
 
 ## Setup
