@@ -18,14 +18,34 @@ A LangGraph-powered conversational agent with web search and persistent notepad 
 
 ```
 src/
-├── agent.py          # AgentSession class — core agent logic
-├── api.py            # FastAPI HTTP service layer + MCP SSE mount
-├── config.py         # Centralized settings from env vars
-├── exceptions.py     # Custom exception hierarchy
-├── logging_config.py # Structured logging setup
-├── main.py           # CLI entry point
-├── mcp_server.py     # MCP server — tools exposed via Model Context Protocol
-└── notepad_rag.py    # Persistent notepad + retrieval engine
+├── cli.py                  # CLI entry point
+├── agent/                  # LangGraph agent core
+│   ├── graph.py            # State graph with RAI guardrail nodes
+│   ├── llm.py              # LLM factory (OpenAI / HuggingFace)
+│   ├── session.py          # AgentSession — orchestrates conversation
+│   └── tools.py            # Tool definitions (search, save, retrieve)
+├── config/                 # Configuration management
+│   ├── __init__.py         # Settings dataclass + loaders
+│   └── config.json         # Default configuration values
+├── core/                   # Shared utilities
+│   ├── embeddings.py       # Sentence-transformer embeddings
+│   ├── exceptions.py       # Custom exception hierarchy
+│   └── logging.py          # Structured logging setup
+├── responsible_ai/         # Responsible AI guardrails
+│   ├── bias_evaluator.py   # Bias & fairness detection
+│   ├── config.py           # RAI configuration
+│   ├── content_filter.py   # Harmful content detection
+│   ├── guardrails.py       # Orchestrator (input/output checks)
+│   ├── pii_detector.py     # PII detection & redaction
+│   └── transparency.py     # Privacy-preserving audit logger
+├── server/                 # Service layer
+│   ├── api.py              # FastAPI HTTP service
+│   ├── mcp.py              # MCP server (SSE transport)
+│   └── registry.py         # MCP tool registry
+└── store/                  # Storage backends
+    ├── chroma_store.py     # ChromaDB vector store
+    ├── factory.py          # Store factory
+    └── file_store.py       # File-based notepad store
 ```
 
 ## Setup
