@@ -18,6 +18,7 @@ from src.agent.prompts import get_persona
 from src.config import Settings
 from src.core.exceptions import LLMError
 from src.core.logging import get_logger
+from src.core.tracing import get_tracer
 from src.responsible_ai import Guardrails
 from src.responsible_ai.config import RAIConfig
 
@@ -63,6 +64,8 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
     else:
         llm = base_llm
 
+    _tracer = get_tracer("agent.graph")
+
     def input_guardrail(state: AgentState) -> AgentState:
         """
         Check user input against responsible AI guardrails.
@@ -80,7 +83,13 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
             return state
 
         session_id = state.get("session_id", "")
-        result = guardrails.check_input(user_text, session_id=session_id)
+        with _tracer.start_as_current_span("input_guardrail") as span:
+            span.set_attribute("session.id", session_id)
+            span.set_attribute("input.length", len(user_text))
+            result = guardrails.check_input(user_text, session_id=session_id)
+            span.set_attribute("guardrail.allowed", result.allowed)
+            span.set_attribute("guardrail.pii_detected", result.pii_detected)
+            span.set_attribute("guardrail.content_flagged", result.content_flagged)
 
         if not result.allowed:
             # Replace the pipeline with a blocked response
@@ -109,11 +118,23 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
 
     def call_model(state: AgentState) -> AgentState:
         messages = [SystemMessage(content=system_prompt)] + state["messages"]
-        try:
-            response = llm.invoke(messages)
-        except Exception as e:
-            logger.error("LLM invocation failed: %s", e)
-            raise LLMError(f"LLM call failed: {e}") from e
+        with _tracer.start_as_current_span("llm_call") as span:
+            span.set_attribute("llm.model", settings.openai_model)
+            span.set_attribute("llm.provider", settings.llm_provider)
+            span.set_attribute("llm.message_count", len(messages))
+            try:
+                response = llm.invoke(messages)
+            except Exception as e:
+                span.record_exception(e)
+                logger.error("LLM invocation failed: %s", e)
+                raise LLMError(f"LLM call failed: {e}") from e
+            # Record token usage if available
+            usage = getattr(response, "usage_metadata", None)
+            if usage:
+                span.set_attribute("llm.tokens.total", usage.get("total_tokens", 0))
+                span.set_attribute("llm.tokens.prompt", usage.get("input_tokens", 0))
+                span.set_attribute("llm.tokens.completion", usage.get("output_tokens", 0))
+            span.set_attribute("llm.response_length", len(getattr(response, "content", "")))
         return {"messages": [response]}
 
     def output_guardrail(state: AgentState) -> AgentState:
@@ -136,7 +157,14 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
             return state
 
         session_id = state.get("session_id", "")
-        result = guardrails.check_output(assistant_text, session_id=session_id)
+        with _tracer.start_as_current_span("output_guardrail") as span:
+            span.set_attribute("session.id", session_id)
+            span.set_attribute("output.length", len(assistant_text))
+            result = guardrails.check_output(assistant_text, session_id=session_id)
+            span.set_attribute("guardrail.allowed", result.allowed)
+            span.set_attribute("guardrail.pii_detected", result.pii_detected)
+            span.set_attribute("guardrail.bias_detected", result.bias_detected)
+            span.set_attribute("guardrail.disclaimers", len(result.disclaimers_added))
 
         if not result.allowed or result.processed_text != assistant_text:
             modified_msg = AIMessage(content=result.processed_text)

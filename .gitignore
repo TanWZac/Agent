@@ -18,6 +18,9 @@ set_env.sh
 # Data
 data/
 
+# Eval reports (generated)
+eval/report.json
+
 # IDE
 .idea/
 .vscode/

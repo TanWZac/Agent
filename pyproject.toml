@@ -40,8 +40,20 @@ rai = [
   "pyrit>=0.13.0",
   "fairlearn>=0.7.0",
 ]
+otel = [
+  "opentelemetry-api>=1.24.0",
+  "opentelemetry-sdk>=1.24.0",
+  "opentelemetry-exporter-otlp>=1.24.0",
+]
 azure = [
   "azure-storage-blob>=12.0.0",
+  "azure-monitor-opentelemetry-exporter>=1.0.0b21",
+]
+redis = [
+  "redis>=5.0.0",
+]
+plugins = [
+  "pyyaml>=6.0.0",
 ]
 
 [project.scripts]

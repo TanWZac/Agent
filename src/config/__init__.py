@@ -136,6 +136,49 @@ class Settings:
     mcp_endpoint: str = field(
         default_factory=lambda: _json_cfg.get("server", {}).get("mcp_endpoint", "/mcp")
     )
+    max_sessions: int = field(
+        default_factory=lambda: int(os.getenv("MAX_SESSIONS",
+                                              _json_cfg.get("server", {}).get("max_sessions", 1000)))
+    )
+
+    # Session management
+    session_store_backend: str = field(
+        default_factory=lambda: os.getenv("SESSION_STORE_BACKEND",
+                                          _json_cfg.get("session", {}).get("store_backend", "memory"))
+    )
+    redis_url: str = field(
+        default_factory=lambda: os.getenv("REDIS_URL",
+                                          _json_cfg.get("session", {}).get("redis_url", "redis://localhost:6379/0"))
+    )
+    session_ttl_hours: int = field(
+        default_factory=lambda: int(os.getenv("SESSION_TTL_HOURS",
+                                              _json_cfg.get("session", {}).get("ttl_hours", 24)))
+    )
+    max_history_messages: int = field(
+        default_factory=lambda: int(os.getenv("MAX_HISTORY_MESSAGES",
+                                              _json_cfg.get("session", {}).get("max_history_messages", 20)))
+    )
+    summarize_keep_recent: int = field(
+        default_factory=lambda: int(os.getenv("SUMMARIZE_KEEP_RECENT",
+                                              _json_cfg.get("session", {}).get("summarize_keep_recent", 6)))
+    )
+
+    # LLM fallback
+    llm_fallback_models: list[str] = field(
+        default_factory=lambda: [
+            m.strip()
+            for m in os.getenv("LLM_FALLBACK_MODELS", ",".join(
+                _json_cfg.get("llm", {}).get("fallback_models", [])
+            )).split(",")
+            if m.strip()
+        ]
+    )
+
+    # Plugins
+    plugin_tools_file: str = field(
+        default_factory=lambda: os.getenv("PLUGIN_TOOLS_FILE",
+                                          _json_cfg.get("plugins", {}).get("tools_file", "config/tools.yml"))
+    )
 
     # Logging
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL",

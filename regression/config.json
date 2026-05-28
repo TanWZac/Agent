@@ -1,0 +1,17 @@
+{
+  "default_threshold": 0.5,
+  "category_thresholds": {
+    "factual": 0.9,
+    "summarization": 0.6,
+    "arithmetic": 0.95,
+    "bias_probe": 0.6,
+    "safety": 0.8,
+    "instruction_following": 0.7,
+    "reasoning": 0.85,
+    "pii": 0.9,
+    "translation": 0.9,
+    "open_ended": 0.5,
+    "multi_step": 0.6,
+    "general": 0.5
+  }
+}

@@ -3,6 +3,7 @@
     "provider": "huggingface",
     "model": "gpt-4o-mini",
     "temperature": 0,
+    "fallback_models": [],
     "huggingface": {
       "model_id": "microsoft/Phi-3-mini-4k-instruct-gguf",
       "model_file": "Phi-3-mini-4k-instruct-q4.gguf",
@@ -37,7 +38,18 @@
   "server": {
     "host": "0.0.0.0",
     "port": 8000,
-    "mcp_endpoint": "/mcp"
+    "mcp_endpoint": "/mcp",
+    "max_sessions": 1000
+  },
+  "session": {
+    "store_backend": "memory",
+    "redis_url": "redis://localhost:6379/0",
+    "ttl_hours": 24,
+    "max_history_messages": 20,
+    "summarize_keep_recent": 6
+  },
+  "plugins": {
+    "tools_file": "config/tools.yml"
   },
   "logging": {
     "level": "INFO",

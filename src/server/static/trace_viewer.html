@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Trace Replay Viewer</title>
+    <link rel="stylesheet" href="/static/trace_viewer.css" />
+  </head>
+  <body>
+    <div id="app">
+      <h1>Trace Replay Viewer</h1>
+      <div id="meta"></div>
+      <div id="controls">
+        <label>Delay (ms): <input id="delay" type="number" value="100" min="0"/></label>
+        <button id="startBtn">Start Replay</button>
+      </div>
+
+      <div id="timeline" class="timeline"></div>
+      <ul id="events" class="events"></ul>
+      <div id="status" class="status"></div>
+    </div>
+
+    <script src="/static/trace_viewer.js"></script>
+  </body>
+</html>

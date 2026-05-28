@@ -21,6 +21,8 @@ def create_tools(store: NoteStore, settings: Settings) -> list:
     """
     Build the list of LangGraph-compatible tools bound to a store instance.
 
+    Includes built-in tools and any user-defined plugin tools from YAML config.
+
     :param store: The note store for save/retrieve operations.
     :param settings: Application settings for search config.
     :return: List of @tool-decorated callables.
@@ -65,4 +67,16 @@ def create_tools(store: NoteStore, settings: Settings) -> list:
             return "No relevant notes found."
         return "\n".join([f"- {h.text} (score={h.score:.3f})" for h in hits])
 
-    return [search_web, save_note, retrieve_notes]
+    builtin_tools = [search_web, save_note, retrieve_notes]
+
+    # Load user-defined plugin tools
+    try:
+        from src.agent.plugins import load_plugin_tools
+        plugin_tools = load_plugin_tools()
+        if plugin_tools:
+            logger.info("Loaded %d plugin tool(s)", len(plugin_tools))
+            builtin_tools.extend(plugin_tools)
+    except Exception as e:
+        logger.warning("Failed to load plugin tools: %s", e)
+
+    return builtin_tools
