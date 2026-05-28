@@ -85,12 +85,14 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
 
         return state
 
-    def call_model(state: AgentState) -> AgentState:
-        # If the last message is already an AI message (from guardrail block), skip LLM
-        if state["messages"] and hasattr(state["messages"][-1], "type"):
-            if state["messages"][-1].type == "ai":
-                return state
+    def input_was_blocked(state: AgentState) -> str:
+        """Route based on whether input was blocked by guardrails."""
+        messages = state["messages"]
+        if messages and hasattr(messages[-1], "type") and messages[-1].type == "ai":
+            return "blocked"
+        return "allowed"
 
+    def call_model(state: AgentState) -> AgentState:
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
         try:
             response = llm.invoke(messages)
@@ -140,22 +142,11 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
     graph.add_node("tools", ToolNode(tools))
 
     graph.add_edge(START, "input_guardrail")
-    graph.add_edge("input_guardrail", "assistant")
-    graph.add_conditional_edges("assistant", should_end_or_continue, {"tools": "tools", END: END})
-    graph.add_edge("tools", "assistant")
-    graph.add_edge("output_guardrail", END)
-
-    # Re-route: after assistant decides to end, go through output guardrail
-    # We need to adjust: assistant -> output_guardrail -> END instead of assistant -> END
-    # Let's restructure:
-    graph = StateGraph(AgentState)
-    graph.add_node("input_guardrail", input_guardrail)
-    graph.add_node("assistant", call_model)
-    graph.add_node("output_guardrail", output_guardrail)
-    graph.add_node("tools", ToolNode(tools))
-
-    graph.add_edge(START, "input_guardrail")
-    graph.add_edge("input_guardrail", "assistant")
+    graph.add_conditional_edges(
+        "input_guardrail",
+        input_was_blocked,
+        {"blocked": "output_guardrail", "allowed": "assistant"},
+    )
     graph.add_conditional_edges(
         "assistant",
         should_end_or_continue,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 
@@ -61,6 +62,25 @@ _COMPILED_PATTERNS: dict[ContentCategory, list[re.Pattern]] = {
     for category, patterns in _CATEGORY_PATTERNS.items()
 }
 
+# Basic leetspeak substitutions
+_LEET_MAP: dict[str, str] = {
+    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s",
+    "7": "t", "@": "a", "$": "s", "!": "i",
+}
+
+
+def _normalize_text(text: str) -> str:
+    """Normalize Unicode (NFKD) and apply basic leetspeak reversal."""
+    # Unicode normalization — collapses fullwidth, accented, and homoglyph chars
+    normalized = unicodedata.normalize("NFKD", text)
+    # Strip combining marks (accents) to get base characters
+    normalized = "".join(
+        ch for ch in normalized if not unicodedata.combining(ch)
+    )
+    # Leetspeak reversal
+    normalized = "".join(_LEET_MAP.get(ch, ch) for ch in normalized)
+    return normalized
+
 
 class ContentFilter:
     """Filters content for harmful or policy-violating material."""
@@ -81,12 +101,13 @@ class ContentFilter:
             FilterResult indicating safety status and flagged categories.
         """
         flagged: list[ContentCategory] = []
+        normalized = _normalize_text(text)
 
         for category, patterns in _COMPILED_PATTERNS.items():
             if category not in self._blocked:
                 continue
             for pattern in patterns:
-                if pattern.search(text):
+                if pattern.search(text) or pattern.search(normalized):
                     flagged.append(category)
                     break
 

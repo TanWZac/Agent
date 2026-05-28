@@ -77,6 +77,8 @@ class Guardrails:
         # Rate limiting state: session_id -> list of timestamps
         self._message_timestamps: dict[str, list[float]] = defaultdict(list)
         self._message_counts: dict[str, int] = defaultdict(int)
+        self._last_cleanup: float = time.time()
+        self._cleanup_interval: float = 300.0  # Cleanup stale sessions every 5 minutes
 
         logger.info("Guardrails initialized: config=%s", self._config)
 
@@ -348,6 +350,8 @@ class Guardrails:
     def _is_rate_limited(self, session_id: str) -> bool:
         """Check if session has exceeded rate limits."""
         now = time.time()
+        self._cleanup_stale_sessions(now)
+
         # Per-minute check
         timestamps = self._message_timestamps[session_id]
         recent = [t for t in timestamps if now - t < 60]
@@ -361,6 +365,22 @@ class Guardrails:
             return True
 
         return False
+
+    def _cleanup_stale_sessions(self, now: float) -> None:
+        """Remove sessions with no recent activity to prevent unbounded memory growth."""
+        if now - self._last_cleanup < self._cleanup_interval:
+            return
+        self._last_cleanup = now
+        stale_cutoff = now - 3600  # Sessions inactive for 1 hour
+        stale_sessions = [
+            sid for sid, timestamps in self._message_timestamps.items()
+            if not timestamps or timestamps[-1] < stale_cutoff
+        ]
+        for sid in stale_sessions:
+            del self._message_timestamps[sid]
+            self._message_counts.pop(sid, None)
+        if stale_sessions:
+            logger.debug("Cleaned up %d stale rate-limit sessions", len(stale_sessions))
 
     def _record_message(self, session_id: str) -> None:
         """Record a message timestamp for rate limiting."""

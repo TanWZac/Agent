@@ -244,7 +244,10 @@ class AuditLogger:
     def log_input_check(
         self, session_id: str, text: str, is_safe: bool, details: dict[str, Any] | None = None
     ) -> None:
-        """Log an input safety check (content is NOT stored)."""
+        """Log an input safety check (content stored only if store_content enabled)."""
+        entry_details = details or {}
+        if self._store_content:
+            entry_details["content_preview"] = text[:200]
         self.log(AuditEntry(
             session_hash=_hash_value(session_id),
             event_type="input_check",
@@ -252,13 +255,16 @@ class AuditLogger:
             flagged=not is_safe,
             content_length=len(text),
             content_fingerprint=_content_fingerprint(text),
-            details=details or {},
+            details=entry_details,
         ))
 
     def log_output_check(
         self, session_id: str, text: str, is_safe: bool, details: dict[str, Any] | None = None
     ) -> None:
-        """Log an output safety check (content is NOT stored)."""
+        """Log an output safety check (content stored only if store_content enabled)."""
+        entry_details = details or {}
+        if self._store_content:
+            entry_details["content_preview"] = text[:200]
         self.log(AuditEntry(
             session_hash=_hash_value(session_id),
             event_type="output_check",
@@ -266,7 +272,7 @@ class AuditLogger:
             flagged=not is_safe,
             content_length=len(text),
             content_fingerprint=_content_fingerprint(text),
-            details=details or {},
+            details=entry_details,
         ))
 
     def log_pii_detected(
