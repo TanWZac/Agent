@@ -35,12 +35,14 @@ class AgentSession:
         session_id: str | None = None,
         store: NoteStore | None = None,
         rai_config: RAIConfig | None = None,
+        persona: str | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._settings.validate()
         self.session_id = session_id or str(uuid4())
         self._history: list[AnyMessage] = []
         self._rai_config = rai_config or get_rai_config()
+        self._persona = persona
         self._store = store or create_note_store(
             backend=self._settings.store_backend,
             note_file=self._settings.note_file,
@@ -50,11 +52,11 @@ class AgentSession:
             db_url=self._settings.sqlite_db_url,
         )
         tools = create_tools(self._store, self._settings)
-        self._graph = build_graph(self._settings, tools, rai_config=self._rai_config)
+        self._graph = build_graph(self._settings, tools, rai_config=self._rai_config, persona=self._persona)
         logger.info(
-            "Session created: id=%s, model=%s, store=%s, rai_enabled=%s",
+            "Session created: id=%s, model=%s, store=%s, persona=%s",
             self.session_id, self._settings.openai_model,
-            self._settings.store_backend, self._rai_config.enabled,
+            self._settings.store_backend, self._persona or "default",
         )
 
     @property

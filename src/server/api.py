@@ -78,6 +78,7 @@ app = FastAPI(
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000, description="User message")
     session_id: str | None = Field(None, description="Session ID to continue a conversation")
+    persona: str | None = Field(None, description="Agent persona name (e.g., 'research_assistant', 'customer_support')")
 
 
 class ChatResponse(BaseModel):
@@ -103,6 +104,22 @@ async def health_check():
     return HealthResponse(status="healthy", active_sessions=len(_sessions))
 
 
+@app.get("/personas")
+async def get_personas():
+    """List available agent personas."""
+    from src.agent.prompts import get_persona, list_personas
+
+    personas = []
+    for name in list_personas():
+        p = get_persona(name)
+        personas.append({
+            "name": p.name,
+            "display_name": p.display_name,
+            "description": p.description,
+        })
+    return {"personas": personas}
+
+
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(_verify_api_key)])
 async def chat(request: ChatRequest):
     """Send a message to the agent and get a response."""
@@ -110,7 +127,7 @@ async def chat(request: ChatRequest):
         if request.session_id and request.session_id in _sessions:
             session = _sessions[request.session_id]
         else:
-            session = AgentSession()
+            session = AgentSession(persona=request.persona)
             _sessions[session.session_id] = session
 
         response_text = session.chat(request.message)

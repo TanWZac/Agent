@@ -14,6 +14,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.agent.llm import create_llm
+from src.agent.prompts import get_persona
 from src.config import Settings
 from src.core.exceptions import LLMError
 from src.core.logging import get_logger
@@ -22,14 +23,8 @@ from src.responsible_ai.config import RAIConfig
 
 logger = get_logger("agent.graph")
 
-SYSTEM_PROMPT = (
-    "You are a helpful assistant. Use tools when needed. "
-    "Always check retrieve_notes for user-specific context before answering factual questions. "
-    "When user shares durable preferences or facts, call save_note to store them. "
-    "You follow responsible AI principles: be helpful, harmless, and honest. "
-    "Do not generate harmful, misleading, or biased content. "
-    "Respect user privacy and do not request or store unnecessary personal information."
-)
+# Default system prompt (used when no persona is specified)
+SYSTEM_PROMPT = get_persona("default").system_prompt
 
 
 class AgentState(TypedDict):
@@ -43,17 +38,19 @@ class AgentState(TypedDict):
     session_id: str
 
 
-def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = None):
+def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = None, persona: str | None = None):
     """
     Construct and compile the LangGraph state graph.
 
     :param settings: App settings (model config, provider selection).
     :param tools: List of @tool-decorated callables.
     :param rai_config: Optional Responsible AI configuration.
+    :param persona: Optional persona name from the prompt library. Defaults to "default".
     :return: Compiled LangGraph runnable.
     """
     base_llm = create_llm(settings)
     guardrails = Guardrails(config=rai_config)
+    system_prompt = get_persona(persona or "default").system_prompt
 
     # Only bind tools if the model supports it (OpenAI does natively;
     # local models may not support tool-calling via bind_tools)
@@ -111,7 +108,7 @@ def build_graph(settings: Settings, tools: list, rai_config: RAIConfig | None = 
         return "allowed"
 
     def call_model(state: AgentState) -> AgentState:
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+        messages = [SystemMessage(content=system_prompt)] + state["messages"]
         try:
             response = llm.invoke(messages)
         except Exception as e:
