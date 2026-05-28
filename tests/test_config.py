@@ -15,7 +15,7 @@ def test_settings_default_values():
 
 
 def test_settings_validate_missing_key():
-    settings = get_settings(openai_api_key="")
+    settings = get_settings(openai_api_key="", llm_provider="openai")
     with pytest.raises(ConfigurationError, match="OPENAI_API_KEY"):
         settings.validate()
 
@@ -29,3 +29,9 @@ def test_settings_validate_bad_temperature():
 def test_settings_override():
     settings = get_settings(openai_api_key="key", note_file="/tmp/custom.txt")
     assert settings.note_file == "/tmp/custom.txt"
+
+
+def test_settings_huggingface_provider_no_key_needed():
+    settings = get_settings(llm_provider="huggingface", openai_api_key="")
+    # Should NOT raise — HuggingFace doesn't need an OpenAI key
+    settings.validate()

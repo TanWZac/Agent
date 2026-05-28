@@ -51,10 +51,30 @@ class Settings:
     """Centralized, immutable application settings."""
 
     # LLM
+    llm_provider: str = field(default_factory=lambda: _cfg("llm", "provider", "LLM_PROVIDER", "openai"))
     openai_api_key: str = field(repr=False, default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     openai_model: str = field(default_factory=lambda: _cfg("llm", "model", "OPENAI_MODEL", "gpt-4o-mini"))
     openai_temperature: float = field(
         default_factory=lambda: float(_cfg("llm", "temperature", "OPENAI_TEMPERATURE", "0"))
+    )
+
+    # HuggingFace local model
+    hf_model_id: str = field(
+        default_factory=lambda: _json_cfg.get("llm", {}).get("huggingface", {}).get(
+            "model_id", "microsoft/Phi-3-mini-4k-instruct-gguf")
+    )
+    hf_model_file: str = field(
+        default_factory=lambda: _json_cfg.get("llm", {}).get("huggingface", {}).get(
+            "model_file", "Phi-3-mini-4k-instruct-q4.gguf")
+    )
+    hf_n_ctx: int = field(
+        default_factory=lambda: int(_json_cfg.get("llm", {}).get("huggingface", {}).get("n_ctx", 4096))
+    )
+    hf_n_threads: int = field(
+        default_factory=lambda: int(_json_cfg.get("llm", {}).get("huggingface", {}).get("n_threads", 4))
+    )
+    hf_max_tokens: int = field(
+        default_factory=lambda: int(_json_cfg.get("llm", {}).get("huggingface", {}).get("max_tokens", 1024))
     )
 
     # Store
@@ -112,7 +132,11 @@ class Settings:
         """Raise if required settings are missing or invalid."""
         from src.core.exceptions import ConfigurationError
 
-        if not self.openai_api_key:
+        if self.llm_provider not in ("openai", "huggingface"):
+            raise ConfigurationError(
+                f"LLM_PROVIDER must be 'openai' or 'huggingface', got '{self.llm_provider}'."
+            )
+        if self.llm_provider == "openai" and not self.openai_api_key:
             raise ConfigurationError(
                 "OPENAI_API_KEY is not set. Export it or add to .env file."
             )

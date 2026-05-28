@@ -22,7 +22,7 @@ def client(mock_settings, tmp_path):
         note_file=str(tmp_path / "test_notes.txt"),
     )
 
-    with patch("src.agent.graph.ChatOpenAI") as mock_llm_cls, \
+    with patch("src.agent.llm.create_llm") as mock_create_llm, \
          patch("src.agent.tools.DuckDuckGoSearchResults") as mock_ddg_cls, \
          patch("src.agent.session.get_settings", return_value=test_settings), \
          patch("src.config.get_settings", return_value=test_settings):
@@ -33,7 +33,7 @@ def client(mock_settings, tmp_path):
         mock_response = AIMessage(content="Hello from mock assistant")
         mock_bound.invoke.return_value = mock_response
         mock_llm.bind_tools.return_value = mock_bound
-        mock_llm_cls.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
 
         from src.server.api import app
         yield TestClient(app)

@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from src.agent.llm import create_llm
 from src.config import Settings
 from src.core.exceptions import LLMError
 from src.core.logging import get_logger
@@ -31,17 +31,24 @@ def build_graph(settings: Settings, tools: list):
     """Construct and compile the LangGraph state graph.
 
     Args:
-        settings: App settings (model name, temperature, key).
+        settings: App settings (model config, provider selection).
         tools: List of @tool-decorated callables.
 
     Returns:
         Compiled LangGraph runnable.
     """
-    llm = ChatOpenAI(
-        model=settings.openai_model,
-        temperature=settings.openai_temperature,
-        api_key=settings.openai_api_key,
-    ).bind_tools(tools)
+    base_llm = create_llm(settings)
+
+    # Only bind tools if the model supports it (OpenAI does natively;
+    # local models may not support tool-calling via bind_tools)
+    if hasattr(base_llm, "bind_tools"):
+        try:
+            llm = base_llm.bind_tools(tools)
+        except NotImplementedError:
+            logger.warning("LLM does not support bind_tools; tools will be described in prompt")
+            llm = base_llm
+    else:
+        llm = base_llm
 
     def call_model(state: AgentState) -> AgentState:
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
