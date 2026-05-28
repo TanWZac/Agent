@@ -2,12 +2,15 @@
 
 from src.responsible_ai.bias_evaluator import BiasEvalResult, BiasEvaluator
 from src.responsible_ai.guardrails import Guardrails, GuardrailResult
+from src.responsible_ai.testset_validator import TestSetValidator, ValidationReport
 
 __all__ = [
     "BiasEvalResult",
     "BiasEvaluator",
     "Guardrails",
     "GuardrailResult",
+    "TestSetValidator",
+    "ValidationReport",
 ]
 
 # Optional integrations — available when [rai] extras are installed
