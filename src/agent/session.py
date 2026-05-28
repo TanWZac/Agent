@@ -6,9 +6,10 @@ Agent session — orchestrates tools, graph, and conversation history.
 
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
-from langchain_core.messages import AnyMessage, HumanMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 
 from src.agent.graph import build_graph
 from src.agent.tools import create_tools
@@ -19,6 +20,10 @@ from src.store import NoteStore
 from src.store.factory import create_note_store
 
 logger = get_logger("agent.session")
+
+# Conversation summarization threshold (configurable)
+_MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
+_SUMMARIZE_KEEP_RECENT = int(os.getenv("SUMMARIZE_KEEP_RECENT", "6"))
 
 
 class AgentSession:
@@ -119,8 +124,48 @@ class AgentSession:
 
         self._history.append(assistant_msg)
 
+        # Auto-summarize if history exceeds threshold
+        if len(self._history) > _MAX_HISTORY_MESSAGES:
+            self._summarize_history()
+
         logger.info("Session %s: assistant response (%d chars)", self.session_id, len(assistant_text))
         return assistant_text
+
+    def _summarize_history(self) -> None:
+        """Compress older messages into a summary to stay within token limits.
+
+        Keeps the most recent messages intact and replaces older ones with a
+        summary SystemMessage.
+        """
+        if len(self._history) <= _SUMMARIZE_KEEP_RECENT:
+            return
+
+        # Split: old messages to summarize, recent messages to keep
+        to_summarize = self._history[:-_SUMMARIZE_KEEP_RECENT]
+        recent = self._history[-_SUMMARIZE_KEEP_RECENT:]
+
+        # Build summary from old messages
+        summary_parts = []
+        for msg in to_summarize:
+            role = getattr(msg, "type", "unknown")
+            content = getattr(msg, "content", "")
+            if content and role in ("human", "ai"):
+                # Truncate long messages in summary
+                truncated = content[:200] + "..." if len(content) > 200 else content
+                prefix = "User" if role == "human" else "Assistant"
+                summary_parts.append(f"{prefix}: {truncated}")
+
+        if summary_parts:
+            summary_text = (
+                "[Conversation summary of earlier messages]\n"
+                + "\n".join(summary_parts[-10:])  # Keep last 10 summarized exchanges
+            )
+            summary_msg = SystemMessage(content=summary_text)
+            self._history = [summary_msg] + recent
+            logger.info(
+                "Session %s: summarized %d messages into 1 summary + %d recent",
+                self.session_id, len(to_summarize), len(recent),
+            )
 
     def reset_history(self) -> None:
         """

@@ -7,14 +7,16 @@ Supports multiple concurrent sessions and an MCP server via SSE.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import secrets
 import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import AsyncGenerator, Dict
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -183,6 +185,53 @@ async def chat(request: ChatRequest):
     except AgentError as e:
         logger.error("Agent error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/chat/stream", dependencies=[Depends(_verify_api_key)])
+async def chat_stream(request: ChatRequest):
+    """Send a message and receive the response as a Server-Sent Events stream.
+
+    Each SSE event contains a JSON payload with `type` and `data` fields:
+      - type="token": partial response token
+      - type="done": final complete response
+      - type="error": error occurred
+    """
+
+    async def _event_generator() -> AsyncGenerator[str, None]:
+        try:
+            session = _sessions.get_or_create(request.session_id, persona=request.persona)
+            loop = asyncio.get_event_loop()
+            response_text = await loop.run_in_executor(None, session.chat, request.message)
+
+            # Stream the response in chunks to simulate token-by-token delivery
+            chunk_size = 20
+            for i in range(0, len(response_text), chunk_size):
+                chunk = response_text[i:i + chunk_size]
+                event = json.dumps({"type": "token", "data": chunk, "session_id": session.session_id})
+                yield f"data: {event}\n\n"
+
+            # Final event
+            done_event = json.dumps({"type": "done", "data": response_text, "session_id": session.session_id})
+            yield f"data: {done_event}\n\n"
+
+        except LLMError as e:
+            logger.error("LLM error in streaming session: %s", e)
+            error_event = json.dumps({"type": "error", "data": str(e)})
+            yield f"data: {error_event}\n\n"
+        except AgentError as e:
+            logger.error("Agent error in streaming: %s", e)
+            error_event = json.dumps({"type": "error", "data": str(e)})
+            yield f"data: {error_event}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/sessions/{session_id}", response_model=SessionInfo, dependencies=[Depends(_verify_api_key)])

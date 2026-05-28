@@ -68,3 +68,25 @@ def test_session_not_found(client):
 def test_delete_session_not_found(client):
     response = client.delete("/sessions/nonexistent-id")
     assert response.status_code == 404
+
+
+def test_chat_stream_returns_sse(client):
+    """Test that /chat/stream returns a valid SSE response."""
+    import json
+
+    response = client.post("/chat/stream", json={"message": "Hello"})
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+
+    # Parse SSE events
+    events = []
+    for line in response.text.strip().split("\n"):
+        if line.startswith("data: "):
+            events.append(json.loads(line[6:]))
+
+    # Should have at least one token event and one done event
+    assert len(events) >= 2
+    assert events[-1]["type"] == "done"
+    assert "session_id" in events[-1]
+    # The done event contains the full response text
+    assert len(events[-1]["data"]) > 0
