@@ -1,0 +1,28 @@
+# Auto-generated pinned dependencies for reproducible builds.
+# Regenerate with: pip install -e . && pip freeze (filtered to project deps)
+# Last updated: 2026-05-28
+
+langgraph==1.2.2
+langchain==1.3.2
+langchain-openai==1.2.2
+langchain-community==0.4.2
+duckduckgo-search==8.1.1
+python-dotenv==1.2.1
+fastapi==0.123.9
+uvicorn[standard]==0.38.0
+pydantic==2.12.5
+mcp==1.27.1
+sentence-transformers==5.5.1
+numpy==1.26.4
+chromadb==1.5.9
+huggingface-hub==0.33.0
+sqlalchemy==2.0.41
+alembic==1.15.2
+
+# Dev dependencies
+pytest==8.3.5
+httpx==0.28.1
+ruff==0.11.12
+
+# Optional: Azure
+# azure-storage-blob==12.25.1

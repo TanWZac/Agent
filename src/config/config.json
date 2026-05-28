@@ -1,0 +1,72 @@
+{
+  "llm": {
+    "provider": "huggingface",
+    "model": "gpt-4o-mini",
+    "temperature": 0,
+    "huggingface": {
+      "model_id": "microsoft/Phi-3-mini-4k-instruct-gguf",
+      "model_file": "Phi-3-mini-4k-instruct-q4.gguf",
+      "n_ctx": 4096,
+      "n_threads": 4,
+      "max_tokens": 1024
+    }
+  },
+  "store": {
+    "backend": "file",
+    "file": {
+      "path": "data/notepad.txt",
+      "max_size_mb": 10
+    },
+    "chroma": {
+      "collection": "notepad",
+      "persist_dir": "data/chroma_db"
+    },
+    "sqlite": {
+      "db_url": "sqlite:///data/notepad.db"
+    }
+  },
+  "retrieval": {
+    "top_k": 3,
+    "threshold": 0.1,
+    "embedding_model": "all-mpnet-base-v2"
+  },
+  "search": {
+    "provider": "duckduckgo",
+    "max_results": 5
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "mcp_endpoint": "/mcp"
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s | %(levelname)-8s | %(name)s.%(funcName)s | %(message)s",
+    "datefmt": "%Y-%m-%dT%H:%M:%S"
+  },
+  "responsible_ai": {
+    "enabled": true,
+    "content_filter_enabled": true,
+    "blocked_categories": ["violence", "self_harm", "hate_speech", "sexual_content", "illegal_activity"],
+    "pii_detection_enabled": true,
+    "pii_redact_output": true,
+    "pii_block_input": false,
+    "bias_evaluation_enabled": true,
+    "bias_severity_threshold": "medium",
+    "bias_monitored_attributes": ["race", "gender", "religion", "age", "disability", "sexual_orientation", "nationality", "socioeconomic"],
+    "bias_block_on_high_severity": true,
+    "bias_warn_on_output": true,
+    "audit_enabled": true,
+    "audit_log_file": "data/rai_audit.jsonl",
+    "audit_backend": "local",
+    "audit_azure_container": "rai-audit",
+    "audit_retention_days": 90,
+    "audit_store_content": false,
+    "rate_limit_enabled": true,
+    "max_messages_per_minute": 20,
+    "max_messages_per_session": 200,
+    "max_output_length": 10000,
+    "disclaimer_enabled": true,
+    "disclaimer_topics": ["medical", "legal", "financial"]
+  }
+}

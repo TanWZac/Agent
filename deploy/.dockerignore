@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.env
+set_env.sh
+.pytest_cache
+.mypy_cache
+graphify-out
+*.egg-info
+dist
+build
+.DS_Store
+data/rai_audit.jsonl
