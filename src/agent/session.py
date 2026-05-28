@@ -1,0 +1,91 @@
+"""Agent session — orchestrates tools, graph, and conversation history."""
+
+from __future__ import annotations
+
+from uuid import uuid4
+
+from langchain_core.messages import AnyMessage, HumanMessage
+
+from src.agent.graph import build_graph
+from src.agent.tools import create_tools
+from src.config import Settings, get_settings
+from src.core.logging import get_logger
+from src.store import NoteStore
+from src.store.factory import create_note_store
+
+logger = get_logger("agent.session")
+
+
+class AgentSession:
+    """Encapsulates a single conversational session with history.
+
+    Designed for both CLI usage and integration into web services.
+    Each session maintains its own message history and can be serialized.
+    """
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        session_id: str | None = None,
+        store: NoteStore | None = None,
+    ) -> None:
+        self._settings = settings or get_settings()
+        self._settings.validate()
+        self.session_id = session_id or str(uuid4())
+        self._history: list[AnyMessage] = []
+        self._store = store or create_note_store(
+            backend=self._settings.store_backend,
+            note_file=self._settings.note_file,
+            max_size_mb=self._settings.max_note_file_size_mb,
+            collection_name=self._settings.chroma_collection,
+            persist_directory=self._settings.chroma_persist_dir,
+        )
+        tools = create_tools(self._store, self._settings)
+        self._graph = build_graph(self._settings, tools)
+        logger.info(
+            "Session created: id=%s, model=%s, store=%s",
+            self.session_id, self._settings.openai_model, self._settings.store_backend,
+        )
+
+    @property
+    def notepad(self) -> NoteStore:
+        return self._store
+
+    @property
+    def history(self) -> list[AnyMessage]:
+        """Read-only access to the conversation history."""
+        return list(self._history)
+
+    def chat(self, user_message: str) -> str:
+        """Send a message and get the assistant's response.
+
+        Maintains conversation history across calls within this session.
+
+        Args:
+            user_message: The user's input text.
+
+        Returns:
+            The assistant's response text.
+        """
+        human_msg = HumanMessage(content=user_message)
+        self._history.append(human_msg)
+
+        logger.info("Session %s: user message (%d chars)", self.session_id, len(user_message))
+
+        result = self._graph.invoke({"messages": list(self._history)})
+        assistant_msg = result["messages"][-1]
+        assistant_text = getattr(assistant_msg, "content", str(assistant_msg))
+
+        self._history.append(assistant_msg)
+
+        # Persist to notepad for long-term memory
+        self._store.append(f"USER: {user_message}")
+        self._store.append(f"ASSISTANT: {assistant_text}")
+
+        logger.info("Session %s: assistant response (%d chars)", self.session_id, len(assistant_text))
+        return assistant_text
+
+    def reset_history(self) -> None:
+        """Clear session history (notepad persists)."""
+        self._history.clear()
+        logger.info("Session %s: history reset", self.session_id)

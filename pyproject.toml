@@ -1,7 +1,7 @@
 [project]
 name = "langgraph-notepad-rag-agent"
-version = "0.1.0"
-description = "LangGraph agent with web search and persistent notepad RAG"
+version = "0.4.0"
+description = "LangGraph agent with web search, persistent notepad RAG, and MCP server — usable as CLI, HTTP service, or MCP endpoint"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -10,11 +10,32 @@ dependencies = [
   "langchain-openai>=0.2.0",
   "langchain-community>=0.3.0",
   "duckduckgo-search>=6.2.12",
-  "python-dotenv>=1.0.1"
+  "python-dotenv>=1.0.1",
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.0.0",
+  "mcp>=1.0.0",
+  "sentence-transformers>=3.0.0",
+  "numpy>=1.24.0",
+  "chromadb>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "httpx>=0.27.0",
+  "mypy>=1.10",
 ]
 
 [project.scripts]
-notepad-agent = "src.main:main"
+notepad-agent = "src.cli:main"
+notepad-agent-serve = "src.server.api:start_server"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true

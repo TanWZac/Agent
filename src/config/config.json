@@ -1,0 +1,37 @@
+{
+  "llm": {
+    "model": "gpt-4o-mini",
+    "temperature": 0,
+    "provider": "openai"
+  },
+  "store": {
+    "backend": "file",
+    "file": {
+      "path": "data/notepad.txt",
+      "max_size_mb": 10
+    },
+    "chroma": {
+      "collection": "notepad",
+      "persist_dir": "data/chroma_db"
+    }
+  },
+  "retrieval": {
+    "top_k": 3,
+    "threshold": 0.1,
+    "embedding_model": "all-mpnet-base-v2"
+  },
+  "search": {
+    "provider": "duckduckgo",
+    "max_results": 5
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "mcp_endpoint": "/mcp"
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s | %(levelname)-8s | %(name)s.%(funcName)s | %(message)s",
+    "datefmt": "%Y-%m-%dT%H:%M:%S"
+  }
+}
