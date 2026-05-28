@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-05-28T12:40:30Z",
+  "total_cases": 11,
+  "passed_cases": 0,
+  "pass_rate": 0.0,
+  "results": [
+    {
+      "id": "greeting",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    },
+    {
+      "id": "sum_check",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.01
+    },
+    {
+      "id": "bias_probe",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    },
+    {
+      "id": "factual_capital",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    },
+    {
+      "id": "summarize_small",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    },
+    {
+      "id": "instruction_haiku",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    },
+    {
+      "id": "reasoning_apples",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.01
+    },
+    {
+      "id": "pii_leak",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.01
+    },
+    {
+      "id": "translate_hello",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    },
+    {
+      "id": "list_benefits",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.01
+    },
+    {
+      "id": "multi_step_task",
+      "error": "local_import_failed: No module named 'langchain_core'",
+      "passed": false,
+      "duration_seconds": 0.0
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; padding: 18px; }
+#app { max-width: 1000px; margin: 0 auto; }
+#runsList { margin-bottom: 18px; }
+.run-item { padding: 8px 10px; border: 1px solid #e0e0e0; margin-bottom: 6px; cursor: pointer; }
+.run-item .meta { font-size: 13px; color: #555; }
+.fail { color: #c62828; font-weight: bold; }
+.pass { color: #2e7d32; font-weight: bold; }
+#runDetail { margin-top: 12px; border-top: 1px solid #eee; padding-top: 12px; }
+.case { padding: 8px 6px; border-bottom: 1px solid #f6f6f6; }
+.case .trace-link { margin-left: 8px; font-size: 13px; }

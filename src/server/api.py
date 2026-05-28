@@ -25,6 +25,7 @@ from src.config import get_settings
 from src.core.exceptions import AgentError, ConfigurationError, LLMError
 from src.core.logging import get_logger, setup_logging
 from src.server.mcp import create_sse_transport, mcp_server
+from src.observability import core as observability
 
 logger = get_logger("server.api")
 
@@ -134,6 +135,13 @@ class SessionInfo(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     active_sessions: int
+
+
+class TraceCreateRequest(BaseModel):
+    session_id: str | None = Field(None, description="Related session id")
+    name: str | None = Field(None, description="Trace name")
+    metadata: dict | None = Field(None, description="Optional metadata")
+
 
 
 # --- Endpoints ---
@@ -258,11 +266,43 @@ async def reset_session(session_id: str):
     return {"detail": "Session history reset"}
 
 
+@app.post("/traces", dependencies=[Depends(_verify_api_key)])
+async def create_trace(request: TraceCreateRequest):
+    """Create a new observability trace (useful for manual instrumentation)."""
+    trace_id = observability.start_trace(session_id=request.session_id, name=request.name, metadata=request.metadata or {})
+    return {"trace_id": trace_id}
+
+
+@app.get("/traces", dependencies=[Depends(_verify_api_key)])
+async def list_traces(session_id: str | None = None, limit: int = 50):
+    """List recent traces, optionally filtered by session_id."""
+    traces = observability.list_traces(session_id=session_id, limit=limit)
+    # Return lightweight metadata list
+    items = [
+        {"trace_id": t.get("trace_id"), "session_id": t.get("session_id"), "start_time": t.get("start_time"), "end_time": t.get("end_time")}
+        for t in traces
+    ]
+    return {"traces": items}
+
+
+@app.get("/traces/{trace_id}", dependencies=[Depends(_verify_api_key)])
+async def get_trace(trace_id: str):
+    t = observability.get_trace(trace_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Trace not found")
+    return t
+
+
 # --- MCP Server Endpoints (SSE) ---
 # The MCP SDK's SseServerTransport operates at the raw ASGI level.
 # We mount it via Starlette Routes for proper ASGI lifecycle management.
 
 from starlette.routing import Route
+import json
+import asyncio
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 
 async def _mcp_sse_app(scope, receive, send):
@@ -281,6 +321,103 @@ async def _mcp_post_app(scope, receive, send):
 # Mount as raw ASGI routes — avoids accessing private Request._send
 app.router.routes.append(Route("/mcp", endpoint=_mcp_sse_app, methods=["GET"]))
 app.router.routes.append(Route("/mcp", endpoint=_mcp_post_app, methods=["POST"]))
+
+# Mount static UI files (trace viewer)
+_static_dir = Path(__file__).resolve().parent / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+else:
+    logger.warning("Static UI directory not found: %s", _static_dir)
+
+
+@app.get('/ui/traces/{trace_id}', dependencies=[Depends(_verify_api_key)])
+async def trace_viewer_ui(trace_id: str):
+    """Serve the trace viewer UI for a given trace id."""
+    html_path = _static_dir / 'trace_viewer.html'
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Trace viewer UI not found")
+    return FileResponse(str(html_path))
+
+
+@app.get('/regression/runs', dependencies=[Depends(_verify_api_key)])
+async def list_regression_runs():
+    """Return list of saved regression runs (reads regression/runs/index.json)."""
+    runs_dir = Path(__file__).resolve().parents[2] / "regression" / "runs"
+    index_file = runs_dir / "index.json"
+    if index_file.exists():
+        try:
+            with index_file.open("r", encoding="utf-8") as fh:
+                idx = json.load(fh)
+            return {"runs": idx}
+        except Exception:
+            pass
+
+    # Fallback: scan runs directory
+    runs = []
+    if runs_dir.exists():
+        for p in sorted(runs_dir.glob("*.json"), reverse=True):
+            if p.name == "index.json":
+                continue
+            try:
+                with p.open("r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                runs.append({
+                    "run_id": data.get("run_id") or p.stem,
+                    "timestamp": data.get("timestamp"),
+                    "pass_rate": data.get("pass_rate"),
+                    "total_cases": data.get("total_cases"),
+                    "passed_cases": data.get("passed_cases"),
+                    "file": str(p),
+                })
+            except Exception:
+                continue
+    return {"runs": runs}
+
+
+@app.get('/regression/runs/{run_id}', dependencies=[Depends(_verify_api_key)])
+async def get_regression_run(run_id: str):
+    runs_dir = Path(__file__).resolve().parents[2] / "regression" / "runs"
+    run_file = runs_dir / f"{run_id}.json"
+    if not run_file.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        with run_file.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/ui/regression', dependencies=[Depends(_verify_api_key)])
+async def regression_ui():
+    html_path = _static_dir / 'regression_runs.html'
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Regression UI not found")
+    return FileResponse(str(html_path))
+
+
+@app.get("/traces/{trace_id}/replay", dependencies=[Depends(_verify_api_key)])
+async def replay_trace(trace_id: str, delay_ms: int = 100):
+    """Stream trace events as Server-Sent Events for simple replay/UI consumption.
+
+    `delay_ms` controls the pause between events to simulate live replay.
+    """
+    trace = observability.get_trace(trace_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail="Trace not found")
+
+    async def _generator():
+        events = trace.get("events", [])
+        for ev in events:
+            payload = {"type": ev.get("type"), "ts": ev.get("ts"), "payload": ev.get("payload")}
+            yield f"data: {json.dumps(payload)}\n\n"
+            await asyncio.sleep(delay_ms / 1000.0)
+
+        # final event with metadata
+        meta = {"type": "trace_end", "trace_id": trace_id, "start_time": trace.get("start_time"), "end_time": trace.get("end_time")}
+        yield f"data: {json.dumps(meta)}\n\n"
+
+    return StreamingResponse(_generator(), media_type="text/event-stream")
 
 
 def start_server() -> None:

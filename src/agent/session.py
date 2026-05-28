@@ -17,6 +17,7 @@ from src.core.logging import get_logger
 from src.responsible_ai.config import RAIConfig
 from src.store import NoteStore
 from src.store.factory import create_note_store
+from src.observability import core as observability
 
 logger = get_logger("agent.session")
 
@@ -96,10 +97,20 @@ class AgentSession:
 
         logger.info("Session %s: user message (%d chars)", self.session_id, len(user_message))
 
-        result = self._graph.invoke({
-            "messages": list(self._history),
-            "session_id": self.session_id,
-        })
+        # Observability: start a trace for this chat interaction
+        trace_id = observability.start_trace(session_id=self.session_id, name="chat", metadata={"persona": self._persona})
+        observability.add_event(trace_id, "user.message", {"length": len(user_message)})
+
+        try:
+            result = self._graph.invoke({
+                "messages": list(self._history),
+                "session_id": self.session_id,
+            })
+            observability.add_event(trace_id, "graph.invoke", {"result_messages": len(result.get("messages", []))})
+        except Exception as e:
+            observability.add_event(trace_id, "error", {"error": str(e)})
+            observability.end_trace(trace_id, status="error")
+            raise
 
         messages = result.get("messages", [])
         if not messages:
@@ -118,6 +129,10 @@ class AgentSession:
         assistant_text = getattr(assistant_msg, "content", str(assistant_msg))
 
         self._history.append(assistant_msg)
+
+        # Observability: assistant response event and end trace
+        observability.add_event(trace_id, "assistant.response", {"length": len(assistant_text)})
+        observability.end_trace(trace_id, status="ok")
 
         # Auto-summarize if history exceeds threshold
         if len(self._history) > self._settings.max_history_messages:
