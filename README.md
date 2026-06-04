@@ -179,6 +179,14 @@ All settings are loaded from environment variables (or `.env` file):
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model to use |
 | `OPENAI_TEMPERATURE` | `0` | LLM temperature |
 | `STORE_BACKEND` | `file` | Storage backend: `file`, `chroma`, or `sqlite` |
+| `CHROMA_COLLECTION` | `notepad` | Chroma collection name |
+| `CHROMA_PERSIST_DIR` | `data/chroma_db` | Local Chroma persistence directory (persistent mode) |
+| `CHROMA_USE_ASYNC_HTTP` | `false` | Enable native async Chroma HTTP client mode |
+| `CHROMA_HOST` | `localhost` | Chroma server host (HTTP mode) |
+| `CHROMA_PORT` | `8000` | Chroma server port (HTTP mode) |
+| `CHROMA_SSL` | `false` | Use HTTPS for Chroma HTTP mode |
+| `CHROMA_TENANT` | `default_tenant` | Chroma tenant |
+| `CHROMA_DATABASE` | `default_database` | Chroma database |
 | `NOTE_FILE` | `data/notepad.txt` | Notepad file path |
 | `SQLITE_DB_URL` | `sqlite:///data/notepad.db` | SQLite connection URL |
 | `LOG_LEVEL` | `INFO` | Logging level |
@@ -190,6 +198,36 @@ All settings are loaded from environment variables (or `.env` file):
 | `MAX_UPLOAD_FILE_SIZE_MB` | `50` | Max upload file size |
 | `FILE_CHUNK_SIZE` | `1000` | Chunk size for file ingestion (chars) |
 | `FILE_CHUNK_OVERLAP` | `200` | Overlap between chunks (chars) |
+
+### Chroma Deployment Modes
+
+When `STORE_BACKEND=chroma`, the store supports two deployment shapes:
+
+1. **Local persistent Chroma (default)**
+
+```bash
+STORE_BACKEND=chroma
+CHROMA_USE_ASYNC_HTTP=false
+CHROMA_PERSIST_DIR=data/chroma_db
+CHROMA_COLLECTION=notepad
+```
+
+2. **Remote Chroma server over HTTP (native async mode)**
+
+```bash
+STORE_BACKEND=chroma
+CHROMA_USE_ASYNC_HTTP=true
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+CHROMA_SSL=false
+CHROMA_TENANT=default_tenant
+CHROMA_DATABASE=default_database
+CHROMA_COLLECTION=notepad
+```
+
+Notes:
+- In HTTP mode (`CHROMA_USE_ASYNC_HTTP=true`), async paths use Chroma's native `AsyncHttpClient`.
+- In persistent mode (`CHROMA_USE_ASYNC_HTTP=false`), data is stored on local disk under `CHROMA_PERSIST_DIR`.
 
 ## Alembic Migrations
 
