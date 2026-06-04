@@ -53,6 +53,21 @@ def _cfg(section: str, key: str, env_var: str, default: Any) -> Any:
     return _json_cfg.get(section, {}).get(key, default)
 
 
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _cfg_chroma(key: str, env_var: str, default: Any) -> Any:
+    env_val = os.getenv(env_var)
+    if env_val is not None:
+        return env_val
+    return _json_cfg.get("store", {}).get("chroma", {}).get(key, default)
+
+
 @dataclass(frozen=True)
 class Settings:
     """Centralized, immutable application settings."""
@@ -95,12 +110,32 @@ class Settings:
                                          _json_cfg.get("store", {}).get("file", {}).get("max_size_mb", 10)))
     )
     chroma_collection: str = field(
-        default_factory=lambda: os.getenv("CHROMA_COLLECTION",
-                                          _json_cfg.get("store", {}).get("chroma", {}).get("collection", "notepad"))
+        default_factory=lambda: _cfg_chroma("collection", "CHROMA_COLLECTION", "notepad")
     )
     chroma_persist_dir: str = field(
-        default_factory=lambda: os.getenv("CHROMA_PERSIST_DIR",
-                                          _json_cfg.get("store", {}).get("chroma", {}).get("persist_dir", "data/chroma_db"))
+        default_factory=lambda: _cfg_chroma("persist_dir", "CHROMA_PERSIST_DIR", "data/chroma_db")
+    )
+    chroma_use_async_http: bool = field(
+        default_factory=lambda: _to_bool(
+            _cfg_chroma("use_async_http", "CHROMA_USE_ASYNC_HTTP", False)
+        )
+    )
+    chroma_host: str = field(
+        default_factory=lambda: _cfg_chroma("host", "CHROMA_HOST", "localhost")
+    )
+    chroma_port: int = field(
+        default_factory=lambda: int(_cfg_chroma("port", "CHROMA_PORT", 8000))
+    )
+    chroma_ssl: bool = field(
+        default_factory=lambda: _to_bool(
+            _cfg_chroma("ssl", "CHROMA_SSL", False)
+        )
+    )
+    chroma_tenant: str = field(
+        default_factory=lambda: _cfg_chroma("tenant", "CHROMA_TENANT", "default_tenant")
+    )
+    chroma_database: str = field(
+        default_factory=lambda: _cfg_chroma("database", "CHROMA_DATABASE", "default_database")
     )
     sqlite_db_url: str = field(
         default_factory=lambda: os.getenv(
@@ -161,6 +196,8 @@ class Settings:
             raise ConfigurationError(
                 f"STORE_BACKEND must be 'file', 'chroma', or 'sqlite', got '{self.store_backend}'."
             )
+        if self.chroma_port <= 0:
+            raise ConfigurationError("CHROMA_PORT must be > 0.")
 
     # --- Secret protection ---
     _SECRET_FIELDS = frozenset({"openai_api_key"})

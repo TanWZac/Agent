@@ -84,3 +84,18 @@ class NoteStore(ABC):
         """Return the number of stored notes asynchronously."""
         notes = await self.load_notes_async()
         return len(notes)
+
+    def close(self) -> None:
+        """Release backend resources for synchronous runtimes.
+
+        Backends with explicit handles (DB engines, network clients) can
+        override this. The default implementation is a no-op.
+        """
+
+    async def close_async(self) -> None:
+        """Release backend resources for asynchronous runtimes.
+
+        The default implementation offloads the synchronous close hook.
+        Backends can override this with native async disposal logic.
+        """
+        await asyncio.to_thread(self.close)

@@ -22,7 +22,7 @@ from src.agent.file_ingest import convert_bytes_to_markdown, ALLOWED_EXTENSIONS
 from src.config import get_settings
 from src.core.exceptions import AgentError, ConfigurationError, LLMError
 from src.core.logging import get_logger, setup_logging
-from src.server.mcp import create_sse_transport, mcp_server
+from src.server.mcp import create_sse_transport, mcp_server, shutdown_store
 
 logger = get_logger("server.api")
 
@@ -37,7 +37,7 @@ class _SessionStore(OrderedDict):
         super().__init__()
         self._max_size = max_size
 
-    def get_or_create(self, session_id: str | None, persona: str | None = None) -> AgentSession:
+    async def get_or_create(self, session_id: str | None, persona: str | None = None) -> AgentSession:
         """Get existing session or create new one, evicting oldest if at capacity."""
         if session_id and session_id in self:
             self.move_to_end(session_id)
@@ -46,9 +46,29 @@ class _SessionStore(OrderedDict):
         self[session.session_id] = session
         self.move_to_end(session.session_id)
         while len(self) > self._max_size:
-            evicted_id, _ = self.popitem(last=False)
+            evicted_id, evicted_session = self.popitem(last=False)
+            try:
+                await evicted_session.close_async()
+            except Exception as e:
+                logger.warning("Failed closing evicted session %s: %s", evicted_id, e)
             logger.info("Evicted oldest session: %s (capacity=%d)", evicted_id, self._max_size)
         return session
+
+    async def delete_session(self, session_id: str) -> None:
+        """Delete and close a specific session."""
+        session = self.pop(session_id, None)
+        if session is None:
+            return
+        try:
+            await session.close_async()
+        except Exception as e:
+            logger.warning("Failed closing deleted session %s: %s", session_id, e)
+
+    async def shutdown(self) -> None:
+        """Close all sessions and clear the store."""
+        session_ids = list(self.keys())
+        for session_id in session_ids:
+            await self.delete_session(session_id)
 
 
 _sessions = _SessionStore()
@@ -99,7 +119,8 @@ async def lifespan(app: FastAPI):
     logger.info("Max sessions: %d", _MAX_SESSIONS)
     yield
     logger.info("API server shutting down, %d active sessions", len(_sessions))
-    _sessions.clear()
+    await _sessions.shutdown()
+    await shutdown_store()
 
 
 app = FastAPI(
@@ -170,7 +191,7 @@ async def get_personas():
 async def chat(request: ChatRequest):
     """Send a message to the agent and get a response."""
     try:
-        session = _sessions.get_or_create(request.session_id, persona=request.persona)
+        session = await _sessions.get_or_create(request.session_id, persona=request.persona)
 
         response_text = await session.chat_async(request.message)
         return ChatResponse(session_id=session.session_id, response=response_text)
@@ -195,7 +216,7 @@ async def get_session(session_id: str):
 async def delete_session(session_id: str):
     if session_id not in _sessions:
         raise HTTPException(status_code=404, detail="Session not found")
-    del _sessions[session_id]
+    await _sessions.delete_session(session_id)
     return {"detail": "Session deleted"}
 
 
@@ -242,7 +263,7 @@ async def chat_with_file(
         raise HTTPException(status_code=422, detail=f"Failed to convert file: {e}") from e
 
     try:
-        session = _sessions.get_or_create(session_id, persona=persona)
+        session = await _sessions.get_or_create(session_id, persona=persona)
 
         # Persist file content into the vector store for cross-turn RAG retrieval
         num_chunks = await session.ingest_file_bytes_async(content, file.filename)

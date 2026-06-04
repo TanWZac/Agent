@@ -19,7 +19,13 @@
     },
     "chroma": {
       "collection": "notepad",
-      "persist_dir": "data/chroma_db"
+      "persist_dir": "data/chroma_db",
+      "use_async_http": false,
+      "host": "localhost",
+      "port": 8000,
+      "ssl": false,
+      "tenant": "default_tenant",
+      "database": "default_database"
     },
     "sqlite": {
       "db_url": "sqlite:///data/notepad.db"

@@ -38,8 +38,29 @@ def _get_store() -> NoteStore:
             max_size_mb=settings.max_note_file_size_mb,
             collection_name=settings.chroma_collection,
             persist_directory=settings.chroma_persist_dir,
+            use_async_http=settings.chroma_use_async_http,
+            host=settings.chroma_host,
+            port=settings.chroma_port,
+            ssl=settings.chroma_ssl,
+            tenant=settings.chroma_tenant,
+            database=settings.chroma_database,
+            db_url=settings.sqlite_db_url,
         )
     return _store
+
+
+async def shutdown_store() -> None:
+    """Release the lazily-initialized MCP store during server shutdown."""
+    global _store
+    if _store is None:
+        return
+
+    try:
+        await _store.close_async()
+    except Exception as e:
+        logger.warning("MCP store shutdown failed: %s", e)
+    finally:
+        _store = None
 
 
 # ---------------------------------------------------------------------------

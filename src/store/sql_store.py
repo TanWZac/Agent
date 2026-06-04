@@ -182,3 +182,18 @@ class SqlNoteStore(NoteStore):
             return int(result.scalar_one())
         except Exception as e:
             raise NotepadError(f"Failed to count sqlite notes async: {e}") from e
+
+    def close(self) -> None:
+        """Dispose underlying SQLAlchemy engines for shutdown cleanup."""
+        try:
+            self._engine.dispose()
+        except Exception as e:
+            raise NotepadError(f"Failed to dispose sqlite engine: {e}") from e
+
+    async def close_async(self) -> None:
+        """Asynchronously dispose sync and async SQLAlchemy engines."""
+        try:
+            self._engine.dispose()
+            await self._async_engine.dispose()
+        except Exception as e:
+            raise NotepadError(f"Failed to dispose sqlite engines async: {e}") from e

@@ -1,7 +1,9 @@
 """Tests for the store factory and ChromaDB backend."""
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import numpy as np
 import pytest
 
 from src.store import NoteStore
@@ -161,3 +163,55 @@ def test_sqlite_store_accepts_async_db_url(tmp_path):
     # Async API should also work on the same store instance.
     notes = asyncio.run(store.load_notes_async())
     assert "sync path note" in notes
+
+
+def test_chroma_store_async_http_native_mode():
+    import chromadb
+
+    sync_collection = MagicMock()
+    sync_collection.count.return_value = 0
+    sync_collection.get.return_value = {"documents": [], "ids": []}
+
+    sync_client = MagicMock()
+    sync_client.get_or_create_collection.return_value = sync_collection
+
+    async_collection = MagicMock()
+    async_collection.add = AsyncMock()
+    async_collection.get = AsyncMock(return_value={"documents": ["Async note"], "ids": ["id-1"]})
+    async_collection.query = AsyncMock(
+        return_value={
+            "documents": [["Async note"]],
+            "distances": [[0.0]],
+        }
+    )
+    async_collection.delete = AsyncMock()
+    async_collection.count = AsyncMock(return_value=1)
+
+    async_client = MagicMock()
+    async_client.get_or_create_collection = AsyncMock(return_value=async_collection)
+
+    with patch.object(chromadb, "HttpClient", return_value=sync_client), \
+         patch.object(chromadb, "AsyncHttpClient", AsyncMock(return_value=async_client)), \
+         patch("src.store.chroma_store.embed", return_value=np.array([[0.1, 0.2]], dtype=np.float32)):
+        store = create_note_store(
+            backend="chroma",
+            collection_name="native_async",
+            use_async_http=True,
+            host="localhost",
+            port=8000,
+            ssl=False,
+        )
+
+        asyncio.run(store.append_async("Async note"))
+        notes = asyncio.run(store.load_notes_async())
+        hits = asyncio.run(store.retrieve_async("async", k=1, threshold=0.0))
+        total = asyncio.run(store.count_async())
+        asyncio.run(store.clear_async())
+        asyncio.run(store.close_async())
+
+    assert notes == ["Async note"]
+    assert hits
+    assert hits[0].text == "Async note"
+    assert total == 1
+    async_collection.add.assert_awaited_once()
+    async_collection.delete.assert_awaited_once_with(ids=["id-1"])

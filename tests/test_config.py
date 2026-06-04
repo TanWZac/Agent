@@ -44,3 +44,26 @@ def test_settings_validate_sqlite_store_backend():
         openai_api_key="",
     )
     settings.validate()
+
+
+def test_settings_chroma_async_http_env(monkeypatch):
+    monkeypatch.setenv("CHROMA_USE_ASYNC_HTTP", "true")
+    monkeypatch.setenv("CHROMA_HOST", "chroma.internal")
+    monkeypatch.setenv("CHROMA_PORT", "8100")
+    monkeypatch.setenv("CHROMA_SSL", "1")
+
+    settings = get_settings(openai_api_key="test-key")
+    assert settings.chroma_use_async_http is True
+    assert settings.chroma_host == "chroma.internal"
+    assert settings.chroma_port == 8100
+    assert settings.chroma_ssl is True
+
+
+def test_settings_validate_bad_chroma_port():
+    settings = get_settings(
+        llm_provider="huggingface",
+        openai_api_key="",
+        chroma_port=0,
+    )
+    with pytest.raises(ConfigurationError, match="CHROMA_PORT"):
+        settings.validate()

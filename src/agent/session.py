@@ -50,6 +50,12 @@ class AgentSession:
             max_size_mb=self._settings.max_note_file_size_mb,
             collection_name=self._settings.chroma_collection,
             persist_directory=self._settings.chroma_persist_dir,
+            use_async_http=self._settings.chroma_use_async_http,
+            host=self._settings.chroma_host,
+            port=self._settings.chroma_port,
+            ssl=self._settings.chroma_ssl,
+            tenant=self._settings.chroma_tenant,
+            database=self._settings.chroma_database,
             db_url=self._settings.sqlite_db_url,
         )
         tools = create_tools(self._store, self._settings)
@@ -197,3 +203,11 @@ class AgentSession:
         from src.agent.file_ingest import ingest_bytes_to_store
 
         return await asyncio.to_thread(ingest_bytes_to_store, content, filename, self._store)
+
+    def close(self) -> None:
+        """Release session resources such as backing store handles."""
+        self._store.close()
+
+    async def close_async(self) -> None:
+        """Asynchronously release session resources such as backing store handles."""
+        await self._store.close_async()

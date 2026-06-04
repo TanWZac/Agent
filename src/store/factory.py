@@ -31,6 +31,12 @@ def create_note_store(backend: str = "file", **kwargs) -> NoteStore:
         return ChromaNoteStore(
             collection_name=kwargs.get("collection_name", "notepad"),
             persist_directory=kwargs.get("persist_directory", "data/chroma_db"),
+            use_async_http=kwargs.get("use_async_http", False),
+            host=kwargs.get("host", "localhost"),
+            port=kwargs.get("port", 8000),
+            ssl=kwargs.get("ssl", False),
+            tenant=kwargs.get("tenant", "default_tenant"),
+            database=kwargs.get("database", "default_database"),
         )
     elif backend == "sqlite":
         from src.store.sql_store import SqlNoteStore
