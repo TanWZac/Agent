@@ -141,3 +141,23 @@ def test_sqlite_store_async_interface(tmp_path):
 
     asyncio.run(store.clear_async())
     assert asyncio.run(store.load_notes_async()) == []
+
+
+def test_sqlite_store_uses_aiosqlite_driver_for_async(tmp_path):
+    db_url = f"sqlite:///{tmp_path / 'notes_native_async.db'}"
+    store = create_note_store(backend="sqlite", db_url=db_url)
+
+    assert store._async_engine.url.drivername == "sqlite+aiosqlite"
+
+
+def test_sqlite_store_accepts_async_db_url(tmp_path):
+    async_db_url = f"sqlite+aiosqlite:///{tmp_path / 'notes_async_url.db'}"
+    store = create_note_store(backend="sqlite", db_url=async_db_url)
+
+    # Sync API still works with an async-form URL.
+    store.append("sync path note")
+    assert "sync path note" in store.load_notes()
+
+    # Async API should also work on the same store instance.
+    notes = asyncio.run(store.load_notes_async())
+    assert "sync path note" in notes
