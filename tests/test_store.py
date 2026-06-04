@@ -1,5 +1,7 @@
 """Tests for the store factory and ChromaDB backend."""
 
+import asyncio
+
 import pytest
 
 from src.store import NoteStore
@@ -121,3 +123,21 @@ def test_stores_share_interface(tmp_path):
         assert store.load_notes()
         store.clear()
         assert store.load_notes() == []
+
+
+def test_sqlite_store_async_interface(tmp_path):
+    db_url = f"sqlite:///{tmp_path / 'notes_async.db'}"
+    store = create_note_store(backend="sqlite", db_url=db_url)
+
+    asyncio.run(store.append_async("Async note"))
+    notes = asyncio.run(store.load_notes_async())
+    assert notes == ["Async note"]
+
+    hits = asyncio.run(store.retrieve_async("Async note", k=1, threshold=0.0))
+    assert hits
+    assert "Async note" in hits[0].text
+
+    assert asyncio.run(store.count_async()) == 1
+
+    asyncio.run(store.clear_async())
+    assert asyncio.run(store.load_notes_async()) == []

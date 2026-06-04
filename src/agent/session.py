@@ -6,6 +6,7 @@ Agent session — orchestrates tools, graph, and conversation history.
 
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 from langchain_core.messages import AnyMessage, HumanMessage
@@ -82,6 +83,32 @@ class AgentSession:
         """
         return list(self._history)
 
+    def _extract_assistant_response(self, result: dict) -> tuple[AnyMessage | None, str]:
+        """Extract the assistant message and response text from graph output."""
+        messages = result.get("messages", [])
+        if not messages:
+            logger.error("Session %s: graph returned empty messages", self.session_id)
+            return None, "I'm sorry, I couldn't generate a response. Please try again."
+
+        # Walk backwards to find the last AI message (skip tool messages)
+        assistant_msg = None
+        for msg in reversed(messages):
+            if getattr(msg, "type", None) == "ai" and not getattr(msg, "tool_calls", None):
+                assistant_msg = msg
+                break
+        if assistant_msg is None:
+            assistant_msg = messages[-1]
+
+        assistant_text = getattr(assistant_msg, "content", str(assistant_msg))
+        return assistant_msg, assistant_text
+
+    async def _invoke_graph_async(self, payload: dict) -> dict:
+        """Invoke the graph without blocking the event loop."""
+        ainvoke = getattr(self._graph, "ainvoke", None)
+        if callable(ainvoke):
+            return await ainvoke(payload)
+        return await asyncio.to_thread(self._graph.invoke, payload)
+
     def chat(self, user_message: str) -> str:
         """
         Send a message and get the assistant's response.
@@ -101,23 +128,28 @@ class AgentSession:
             "session_id": self.session_id,
         })
 
-        messages = result.get("messages", [])
-        if not messages:
-            logger.error("Session %s: graph returned empty messages", self.session_id)
-            return "I'm sorry, I couldn't generate a response. Please try again."
+        assistant_msg, assistant_text = self._extract_assistant_response(result)
+        if assistant_msg is not None:
+            self._history.append(assistant_msg)
 
-        # Walk backwards to find the last AI message (skip tool messages)
-        assistant_msg = None
-        for msg in reversed(messages):
-            if getattr(msg, "type", None) == "ai" and not getattr(msg, "tool_calls", None):
-                assistant_msg = msg
-                break
-        if assistant_msg is None:
-            assistant_msg = messages[-1]
+        logger.info("Session %s: assistant response (%d chars)", self.session_id, len(assistant_text))
+        return assistant_text
 
-        assistant_text = getattr(assistant_msg, "content", str(assistant_msg))
+    async def chat_async(self, user_message: str) -> str:
+        """Asynchronous variant of :meth:`chat` for async server runtimes."""
+        human_msg = HumanMessage(content=user_message)
+        self._history.append(human_msg)
 
-        self._history.append(assistant_msg)
+        logger.info("Session %s: user message (%d chars)", self.session_id, len(user_message))
+
+        result = await self._invoke_graph_async({
+            "messages": list(self._history),
+            "session_id": self.session_id,
+        })
+
+        assistant_msg, assistant_text = self._extract_assistant_response(result)
+        if assistant_msg is not None:
+            self._history.append(assistant_msg)
 
         logger.info("Session %s: assistant response (%d chars)", self.session_id, len(assistant_text))
         return assistant_text
@@ -143,6 +175,12 @@ class AgentSession:
 
         return ingest_file_to_store(file_path, self._store)
 
+    async def ingest_file_async(self, file_path: str) -> int:
+        """Asynchronously ingest a file into the session's vector store."""
+        from src.agent.file_ingest import ingest_file_to_store
+
+        return await asyncio.to_thread(ingest_file_to_store, file_path, self._store)
+
     def ingest_file_bytes(self, content: bytes, filename: str) -> int:
         """Ingest raw file bytes into the session's vector store.
 
@@ -153,3 +191,9 @@ class AgentSession:
         from src.agent.file_ingest import ingest_bytes_to_store
 
         return ingest_bytes_to_store(content, filename, self._store)
+
+    async def ingest_file_bytes_async(self, content: bytes, filename: str) -> int:
+        """Asynchronously ingest raw file bytes into the session's vector store."""
+        from src.agent.file_ingest import ingest_bytes_to_store
+
+        return await asyncio.to_thread(ingest_bytes_to_store, content, filename, self._store)

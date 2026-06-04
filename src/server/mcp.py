@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.types import TextContent, Tool
@@ -51,7 +53,7 @@ async def _handle_search_tools(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="Error: query is required.")]
 
     k = arguments.get("k", 5)
-    results = registry.search(query, k=k)
+    results = await asyncio.to_thread(registry.search, query, k)
 
     if not results:
         return [TextContent(type="text", text="No matching tools found.")]
@@ -72,7 +74,7 @@ async def _handle_search_web(arguments: dict) -> list[TextContent]:
 
         settings = get_settings()
         search = DuckDuckGoSearchResults(max_results=settings.web_search_max_results)
-        results = search.run(query)
+        results = await asyncio.to_thread(search.run, query)
         logger.info("Web search completed for: %s", query)
         return [TextContent(type="text", text=results)]
     except Exception as e:
@@ -87,7 +89,7 @@ async def _handle_save_note(arguments: dict) -> list[TextContent]:
 
     try:
         store = _get_store()
-        store.append(note)
+        await store.append_async(note)
         return [TextContent(type="text", text="Note saved successfully.")]
     except Exception as e:
         logger.error("Save note failed: %s", e)
@@ -102,7 +104,7 @@ async def _handle_retrieve_notes(arguments: dict) -> list[TextContent]:
     k = arguments.get("k", 3)
     try:
         store = _get_store()
-        hits = store.retrieve(question, k=k)
+        hits = await store.retrieve_async(question, k=k)
         if not hits:
             return [TextContent(type="text", text="No relevant notes found.")]
         result = "\n".join([f"- {h.text} (relevance: {h.score:.3f})" for h in hits])
@@ -115,7 +117,7 @@ async def _handle_retrieve_notes(arguments: dict) -> list[TextContent]:
 async def _handle_list_notes(arguments: dict) -> list[TextContent]:
     try:
         store = _get_store()
-        notes = store.load_notes()
+        notes = await store.load_notes_async()
         if not notes:
             return [TextContent(type="text", text="Notepad is empty.")]
         result = "\n".join([f"{i+1}. {note}" for i, note in enumerate(notes)])
@@ -128,7 +130,7 @@ async def _handle_list_notes(arguments: dict) -> list[TextContent]:
 async def _handle_clear_notes(arguments: dict) -> list[TextContent]:
     try:
         store = _get_store()
-        store.clear()
+        await store.clear_async()
         return [TextContent(type="text", text="All notes cleared.")]
     except Exception as e:
         logger.error("Clear notes failed: %s", e)

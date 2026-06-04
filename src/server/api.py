@@ -6,7 +6,6 @@ Supports multiple concurrent sessions and an MCP server via SSE.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import secrets
 import time
@@ -173,9 +172,7 @@ async def chat(request: ChatRequest):
     try:
         session = _sessions.get_or_create(request.session_id, persona=request.persona)
 
-        # Run synchronous LLM call in a thread to avoid blocking the event loop
-        loop = asyncio.get_event_loop()
-        response_text = await loop.run_in_executor(None, session.chat, request.message)
+        response_text = await session.chat_async(request.message)
         return ChatResponse(session_id=session.session_id, response=response_text)
 
     except LLMError as e:
@@ -248,10 +245,7 @@ async def chat_with_file(
         session = _sessions.get_or_create(session_id, persona=persona)
 
         # Persist file content into the vector store for cross-turn RAG retrieval
-        loop = asyncio.get_event_loop()
-        num_chunks = await loop.run_in_executor(
-            None, session.ingest_file_bytes, content, file.filename
-        )
+        num_chunks = await session.ingest_file_bytes_async(content, file.filename)
         logger.info("Stored %d chunks from '%s' in session %s", num_chunks, file.filename, session.session_id)
 
         # Build the prompt — send a summary instruction (full content is in the store)
@@ -267,7 +261,7 @@ async def chat_with_file(
                 f"Use the retrieve_notes tool to access the file content."
             )
 
-        response_text = await loop.run_in_executor(None, session.chat, user_prompt)
+        response_text = await session.chat_async(user_prompt)
         return ChatResponse(session_id=session.session_id, response=response_text)
     except LLMError as e:
         logger.error("LLM error in file upload session: %s", e)
