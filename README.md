@@ -1,14 +1,14 @@
-# LangGraph Notepad RAG Agent
+# LangGraph AI Assistant Platform Reference Architecture
 
-A LangGraph-powered conversational agent with web search and persistent notepad memory. Designed for **interactive CLI** use, **HTTP service integration**, and **MCP (Model Context Protocol) server** exposure.
+A LangGraph-powered conversational AI assistant platform reference architecture with web search, persistent memory and modular tool calling. Designed for **interactive CLI** use, **HTTP service integration**, and **MCP (Model Context Protocol) server** exposure. This project serves as a reference for building scalable, production‑ready AI assistants rather than a simple notepad demo.
 
 ## Features
 
-- LangGraph agent with tool-calling (GPT-4o-mini default, configurable)
+- LangGraph agent with tool‑calling (GPT‑4o‑mini default, configurable)
 - Web search via DuckDuckGo
-- Persistent notepad with lightweight RAG retrieval (Jaccard + stop-word filtering)
+- Persistent memory with lightweight RAG retrieval (Jaccard + stop‑word filtering)
 - **File upload & ingestion** via [Microsoft MarkItDown](https://github.com/microsoft/markitdown) — supports PDF, DOCX, XLSX, PPTX, HTML, images, and more
-- Multi-turn conversation memory within sessions
+- Multi‑turn conversation memory within sessions
 - **FastAPI HTTP service** for integration into microservice architectures
 - **MCP server** (SSE transport) — expose tools to Claude Desktop, VS Code Copilot, or any MCP client
 - Centralized configuration via environment variables
@@ -17,7 +17,7 @@ A LangGraph-powered conversational agent with web search and persistent notepad 
 
 ## Architecture
 
-```
+```text
 src/
 ├── cli.py                  # CLI entry point
 ├── agent/                  # LangGraph agent core
@@ -30,7 +30,7 @@ src/
 │   ├── __init__.py         # Settings dataclass + loaders
 │   └── config.json         # Default configuration values
 ├── core/                   # Shared utilities
-│   ├── embeddings.py       # Sentence-transformer embeddings
+│   ├── embeddings.py       # Sentence‑transformer embeddings
 │   ├── exceptions.py       # Custom exception hierarchy
 │   └── logging.py          # Structured logging setup
 ├── responsible_ai/         # Responsible AI guardrails
@@ -42,7 +42,7 @@ src/
 │   ├── nemo_rails.py       # NeMo Guardrails content safety
 │   ├── pii_detector.py     # PII detection & redaction
 │   ├── testset_validator.py# Test set relevancy validation
-│   └── transparency.py     # Privacy-preserving audit logger
+│   └── transparency.py     # Privacy‑preserving audit logger
 ├── server/                 # Service layer
 │   ├── api.py              # FastAPI HTTP service
 │   ├── mcp.py              # MCP server (SSE transport)
@@ -50,9 +50,56 @@ src/
 └── store/                  # Storage backends
     ├── chroma_store.py     # ChromaDB vector store
     ├── factory.py          # Store factory
-  ├── file_store.py       # File-based notepad store
-  ├── sql_store.py        # SQLite note store (SQLAlchemy)
-  └── db.py               # SQLAlchemy ORM models
+    ├── file_store.py       # File‑based notepad store
+    ├── sql_store.py        # SQLite note store (SQLAlchemy)
+    └── db.py               # SQLAlchemy ORM models
+```
+
+### System Architecture
+
+Below is a high‑level system diagram showing how the components interact. This ASCII diagram emphasises the modular, production‑oriented nature of the platform rather than a single‑use notepad agent.
+
+```text
+                      +-----------------------------+
+                      |        User / Client        |
+                      | (CLI, HTTP API, MCP client) |
+                      +-------------+---------------+
+                                    |
+                                    v
+                       +-----------------------------+
+                       |        FastAPI Service      |
+                       |        (API layer)          |
+                       +-------------+---------------+
+                                    |
+                                    v
+                       +-----------------------------+
+                       |       Session Manager       |
+                       | (in‑memory or Redis store)  |
+                       +-------------+---------------+
+                                    |
+                                    v
+             +---------------------------------------------------+
+             |            LangGraph Orchestrator                 |
+             | (agent logic, state graph, LLM & tool routing)    |
+             +-------------+--------------+-------------+--------+
+                           |              |             |
+                           |              |             |
+                     +-----v-----+  +-----v-----+  +----v-----+
+                     |   Tools   |  |  Memory & |  |  RAI     |
+                     | (search,  |  |  Retrieval|  | Guardrails|
+                     |  save,    |  |  (RAG)    |  |           |
+                     | retrieve, |  +-----------+  +-----------+
+                     |  list,    |        |             |
+                     |  clear,   |        |             |
+                     |  ingest)  |        |             |
+                     +-----------+        |             |
+                             |           v             v
+                             |    +------------+   +------------+
+                             |    |  Storage   |   | Logging &  |
+                             |    | (File/SQL/ |   |  Audit     |
+                             |    |  Chroma)   |   |  Trail     |
+                             |    +------------+   +------------+
+                             |                                     
 ```
 
 ## Responsible AI
@@ -61,17 +108,17 @@ The agent ships with a comprehensive **Responsible AI** layer that wraps every i
 
 | Component | Description |
 |-----------|-------------|
-| **Content Filter** | Regex-based detection of harmful content, jailbreak attempts, and prompt injection |
+| **Content Filter** | Regex‑based detection of harmful content, jailbreak attempts, and prompt injection |
 | **PII Detector** | Identifies and redacts emails, phone numbers, SSNs, credit cards, and IP addresses |
-| **Bias Evaluator** | Keyword-based bias/stereotype detection across protected categories |
-| **NeMo Guardrails** | LLM-as-judge content safety via NVIDIA NeMo Guardrails (Colang flows) |
+| **Bias Evaluator** | Keyword‑based bias/stereotype detection across protected categories |
+| **NeMo Guardrails** | LLM‑as‑judge content safety via NVIDIA NeMo Guardrails (Colang flows) |
 | **Fairlearn Integration** | Statistical fairness metrics (demographic parity, selection rate) for model outputs |
-| **Test Set Validator** | Embedding-based coherence check for evaluation datasets before bias/fairness testing |
-| **Audit Logger** | Privacy-preserving JSONL audit trail with configurable retention |
+| **Test Set Validator** | Embedding‑based coherence check for evaluation datasets before bias/fairness testing |
+| **Audit Logger** | Privacy‑preserving JSONL audit trail with configurable retention |
 
 ### Test Set Validation
 
-Before running bias or fairness evaluation on a user-provided test set, validate that the (prompt, output, reference) triples are semantically coherent:
+Before running bias or fairness evaluation on a user‑provided test set, validate that the (prompt, output, reference) triples are semantically coherent:
 
 ```python
 from src.responsible_ai import TestSetValidator
@@ -94,6 +141,55 @@ Install optional RAI dependencies:
 ```bash
 pip install -e ".[rai]"
 ```
+
+## Business Use Cases
+
+This reference architecture can be adapted to a variety of enterprise workflows and products:
+
+- **Internal knowledge assistants** — answer employee questions by retrieving information from documents, wikis and databases.
+- **Document Q&A and summarisation** — ingest files (PDFs, DOCX, etc.) and allow users to ask questions or request summaries grounded in the document’s content.
+- **Workflow automation** — connect the agent to external tools or APIs (e.g., CRM, ticketing systems, email) and let it execute actions on behalf of the user under strict guardrails.
+- **Agentic tool execution** — decompose complex tasks into tool calls (search, retrieval, calculation) with loop control and state management.
+- **MCP‑based AI tool exposure** — expose your tools to other clients like VS Code or Claude Desktop via the MCP protocol to provide AI‑powered capabilities across applications.
+
+## Evaluation Strategy
+
+To ensure quality and trustworthiness, evaluate the system across multiple dimensions:
+
+- **Retrieval quality**
+  - *Context precision & recall* — how much of the retrieved context is relevant and complete?
+  - *Top‑k accuracy & MRR* — whether the correct documents appear in the top results.
+  - *Latency & freshness* — how fast retrieval is and whether documents are up to date.
+- **Generation quality**
+  - *Faithfulness* — whether responses are grounded in retrieved context and avoid hallucination【765834469848676†L164-L210】.
+  - *Relevance & completeness* — whether answers address the query fully and accurately.
+  - *Safety & toxicity* — detect harmful, biased or unsafe content via guardrails.
+  - *Format compliance* — ensure responses follow the expected structure or schema.
+- **Agent performance**
+  - *Task success rate* — percentage of tasks completed without human intervention.
+  - *Tool‑call accuracy* — correctness of parameters passed to tools.
+  - *Iteration & loop rate* — number of steps the agent takes before reaching a conclusion.
+  - *Fallback & escalation rate* — how often the system must refuse or hand off to a human.
+- **Production metrics**
+  - *Latency & cost* — response times and token usage by the LLM.
+  - *Error rate* — exceptions, timeouts, or failed tool calls.
+  - *User feedback* — subjective satisfaction, helpfulness, and trust.
+
+Combine automated evaluation with periodic manual audits to catch issues that metrics might miss【765834469848676†L164-L210】.
+
+## Production Readiness Checklist
+
+This checklist highlights areas to address before deploying the agent at scale:
+
+- **Session store** — replace the in‑memory session dictionary with Redis or a database for horizontal scaling and persistence.
+- **Storage backend** — use a shared database or object store (e.g., PostgreSQL, Azure Blob, S3, ChromaDB) instead of local files for notes and embeddings.
+- **Authentication & authorization** — enforce API keys, OAuth or enterprise SSO before exposing publicly.
+- **Rate limiting & quotas** — add middleware (e.g., `slowapi`) to prevent abuse and manage resource usage.
+- **Logging & tracing** — centralise logs and metrics (e.g., OpenTelemetry) for monitoring, alerting and debugging.
+- **Testing & CI** — expand test coverage for tool execution, guardrails, retrieval, upload, auth and failure paths; integrate with CI pipelines for linting, type checks and security scanning.
+- **Evaluation harness** — maintain a golden dataset and automated evaluation suite to track regression in retrieval, generation and agent performance over time.
+- **Containerization & deployment** — package the service in Docker and provide scripts or manifests for deployment to Kubernetes, serverless platforms or cloud providers.
+- **Documentation & examples** — include API docs, usage examples and code samples to make integration easier for downstream consumers.
 
 ## Setup
 
@@ -143,17 +239,13 @@ The API runs on `http://0.0.0.0:8000` by default (configurable via `API_HOST`/`A
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What is the weather in Berlin?"}'
+curl -X POST http://localhost:8000/chat   -H "Content-Type: application/json"   -d '{"message": "What is the weather in Berlin?"}'
 ```
 
 **File upload example:**
 
 ```bash
-curl -X POST http://localhost:8000/chat/upload \
-  -F "file=@report.pdf" \
-  -F "message=Summarize the key findings"
+curl -X POST http://localhost:8000/chat/upload   -F "file=@report.pdf"   -F "message=Summarize the key findings"
 ```
 
 ### Programmatic Integration
@@ -214,7 +306,7 @@ pytest -q
 
 ## MCP Server
 
-The agent exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server via SSE transport at `/mcp`. Any MCP-compatible client can connect and use the agent's tools.
+The agent exposes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server via SSE transport at `/mcp`. Any MCP‑compatible client can connect and use the agent's tools.
 
 ### MCP Tools Exposed
 
@@ -270,8 +362,8 @@ async with sse_client("http://localhost:8000/mcp") as (read, write):
 
 ## Scaling Considerations
 
-- **Session store**: Currently in-memory. Replace `_sessions` dict in `api.py` with Redis or a database for horizontal scaling.
-- **Notepad storage**: File-based. For multi-instance deployments, swap `NotepadRAG` backing store to a shared database or object storage.
+- **Session store**: Currently in‑memory. Replace `_sessions` dict in `api.py` with Redis or a database for horizontal scaling.
+- **Notepad storage**: File‑based. For multi‑instance deployments, swap `NotepadRAG` backing store to a shared database or object storage.
 - **Rate limiting**: Add middleware (e.g., `slowapi`) for production deployments.
 - **Auth**: Add API key or OAuth middleware before exposing publicly.
-- **MCP**: The MCP server shares the same FastAPI process. For high-throughput MCP usage, consider running a dedicated instance.
+- **MCP**: The MCP server shares the same FastAPI process. For high‑throughput MCP usage, consider running a dedicated instance.
