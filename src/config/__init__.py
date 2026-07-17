@@ -79,6 +79,19 @@ class Settings:
     openai_temperature: float = field(
         default_factory=lambda: float(_cfg("llm", "temperature", "OPENAI_TEMPERATURE", "0"))
     )
+    azure_openai_api_key: str = field(
+        repr=False,
+        default_factory=lambda: os.getenv("AZURE_OPENAI_API_KEY", ""),
+    )
+    azure_openai_endpoint: str = field(
+        default_factory=lambda: _cfg("llm", "azure_openai_endpoint", "AZURE_OPENAI_ENDPOINT", "")
+    )
+    azure_openai_deployment: str = field(
+        default_factory=lambda: _cfg("llm", "azure_openai_deployment", "AZURE_OPENAI_DEPLOYMENT", "")
+    )
+    azure_openai_api_version: str = field(
+        default_factory=lambda: _cfg("llm", "azure_openai_api_version", "AZURE_OPENAI_API_VERSION", "2024-10-21")
+    )
 
     # HuggingFace local model
     hf_model_id: str = field(
@@ -180,14 +193,27 @@ class Settings:
         """Raise if required settings are missing or invalid."""
         from src.core.exceptions import ConfigurationError
 
-        if self.llm_provider not in ("openai", "huggingface"):
+        if self.llm_provider not in ("openai", "huggingface", "azure_openai"):
             raise ConfigurationError(
-                f"LLM_PROVIDER must be 'openai' or 'huggingface', got '{self.llm_provider}'."
+                f"LLM_PROVIDER must be 'openai', 'huggingface', or 'azure_openai', got '{self.llm_provider}'."
             )
         if self.llm_provider == "openai" and not self.openai_api_key:
             raise ConfigurationError(
                 "OPENAI_API_KEY is not set. Export it or add to .env file."
             )
+        if self.llm_provider == "azure_openai":
+            if not self.azure_openai_api_key:
+                raise ConfigurationError(
+                    "AZURE_OPENAI_API_KEY is not set. Export it or add to .env file."
+                )
+            if not self.azure_openai_endpoint:
+                raise ConfigurationError(
+                    "AZURE_OPENAI_ENDPOINT is not set. Export it or add to .env file."
+                )
+            if not self.azure_openai_deployment:
+                raise ConfigurationError(
+                    "AZURE_OPENAI_DEPLOYMENT is not set. Export it or add to .env file."
+                )
         if self.openai_temperature < 0 or self.openai_temperature > 2:
             raise ConfigurationError("OPENAI_TEMPERATURE must be between 0 and 2.")
         if self.max_note_file_size_mb < 1:
@@ -200,7 +226,7 @@ class Settings:
             raise ConfigurationError("CHROMA_PORT must be > 0.")
 
     # --- Secret protection ---
-    _SECRET_FIELDS = frozenset({"openai_api_key"})
+    _SECRET_FIELDS = frozenset({"openai_api_key", "azure_openai_api_key"})
 
     def __getstate__(self) -> dict:
         """Exclude secret fields from pickling/serialization."""

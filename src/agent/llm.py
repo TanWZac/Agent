@@ -35,6 +35,22 @@ def create_llm(settings: Settings) -> BaseChatModel:
             api_key=settings.openai_api_key,
         )
 
+    elif provider == "azure_openai":
+        from langchain_openai import AzureChatOpenAI
+
+        logger.info(
+            "Using Azure OpenAI provider: deployment=%s, endpoint=%s",
+            settings.azure_openai_deployment,
+            settings.azure_openai_endpoint,
+        )
+        return AzureChatOpenAI(
+            azure_deployment=settings.azure_openai_deployment,
+            azure_endpoint=settings.azure_openai_endpoint,
+            api_key=settings.azure_openai_api_key,
+            api_version=settings.azure_openai_api_version,
+            temperature=settings.openai_temperature,
+        )
+
     elif provider == "huggingface":
         try:
             from langchain_community.chat_models import ChatLlamaCpp
@@ -68,4 +84,6 @@ def create_llm(settings: Settings) -> BaseChatModel:
         )
 
     else:
-        raise ValueError(f"Unknown LLM provider: '{provider}'. Supported: 'openai', 'huggingface'.")
+        raise ValueError(
+            f"Unknown LLM provider: '{provider}'. Supported: 'openai', 'huggingface', 'azure_openai'."
+        )

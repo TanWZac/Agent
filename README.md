@@ -23,7 +23,7 @@ src/
 ├── agent/                  # LangGraph agent core
 │   ├── file_ingest.py      # File upload & MarkItDown conversion
 │   ├── graph.py            # State graph with RAI guardrail nodes
-│   ├── llm.py              # LLM factory (OpenAI / HuggingFace)
+│   ├── llm.py              # LLM factory (OpenAI / Azure OpenAI / HuggingFace)
 │   ├── session.py          # AgentSession — orchestrates conversation
 │   └── tools.py            # Tool definitions (search, save, retrieve, ingest_file)
 ├── config/                 # Configuration management
@@ -102,7 +102,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY
+# Edit .env and set credentials for your selected provider
 ```
 
 ## Usage
@@ -175,9 +175,14 @@ All settings are loaded from environment variables (or `.env` file):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `LLM_PROVIDER` | `openai` | LLM provider: `openai`, `azure_openai`, or `huggingface` |
 | `OPENAI_API_KEY` | *(required)* | OpenAI API key |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model to use |
 | `OPENAI_TEMPERATURE` | `0` | LLM temperature |
+| `AZURE_OPENAI_API_KEY` | *(required for `azure_openai`)* | Azure OpenAI / Azure AI Foundry API key |
+| `AZURE_OPENAI_ENDPOINT` | *(required for `azure_openai`)* | Azure OpenAI endpoint |
+| `AZURE_OPENAI_DEPLOYMENT` | *(required for `azure_openai`)* | Azure model deployment name |
+| `AZURE_OPENAI_API_VERSION` | `2024-10-21` | Azure OpenAI API version |
 | `STORE_BACKEND` | `file` | Storage backend: `file`, `chroma`, or `sqlite` |
 | `CHROMA_COLLECTION` | `notepad` | Chroma collection name |
 | `CHROMA_PERSIST_DIR` | `data/chroma_db` | Local Chroma persistence directory (persistent mode) |
@@ -198,6 +203,19 @@ All settings are loaded from environment variables (or `.env` file):
 | `MAX_UPLOAD_FILE_SIZE_MB` | `50` | Max upload file size |
 | `FILE_CHUNK_SIZE` | `1000` | Chunk size for file ingestion (chars) |
 | `FILE_CHUNK_OVERLAP` | `200` | Overlap between chunks (chars) |
+
+### Azure AI Foundry Example
+
+If your Azure AI Foundry deployment exposes an OpenAI-compatible chat endpoint:
+
+```bash
+LLM_PROVIDER=azure_openai
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_API_VERSION=2024-10-21
+AZURE_OPENAI_API_KEY=...
+OPENAI_TEMPERATURE=0
+```
 
 ### Chroma Deployment Modes
 

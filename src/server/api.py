@@ -167,6 +167,12 @@ async def health_check():
     # Validate LLM reachability for meaningful load balancer health
     if settings.llm_provider == "openai" and not settings.openai_api_key:
         status = "degraded"
+    if settings.llm_provider == "azure_openai" and (
+        not settings.azure_openai_api_key
+        or not settings.azure_openai_endpoint
+        or not settings.azure_openai_deployment
+    ):
+        status = "degraded"
 
     return HealthResponse(status=status, active_sessions=len(_sessions))
 

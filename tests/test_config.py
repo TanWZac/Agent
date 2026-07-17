@@ -37,6 +37,50 @@ def test_settings_huggingface_provider_no_key_needed():
     settings.validate()
 
 
+def test_settings_azure_provider_no_key_needed_for_openai():
+    settings = get_settings(
+        llm_provider="azure_openai",
+        openai_api_key="",
+        azure_openai_api_key="test-azure-key",
+        azure_openai_endpoint="https://example.openai.azure.com/",
+        azure_openai_deployment="gpt-4o-mini",
+    )
+    settings.validate()
+
+
+def test_settings_validate_missing_azure_key():
+    settings = get_settings(
+        llm_provider="azure_openai",
+        azure_openai_api_key="",
+        azure_openai_endpoint="https://example.openai.azure.com/",
+        azure_openai_deployment="gpt-4o-mini",
+    )
+    with pytest.raises(ConfigurationError, match="AZURE_OPENAI_API_KEY"):
+        settings.validate()
+
+
+def test_settings_validate_missing_azure_endpoint():
+    settings = get_settings(
+        llm_provider="azure_openai",
+        azure_openai_api_key="test-azure-key",
+        azure_openai_endpoint="",
+        azure_openai_deployment="gpt-4o-mini",
+    )
+    with pytest.raises(ConfigurationError, match="AZURE_OPENAI_ENDPOINT"):
+        settings.validate()
+
+
+def test_settings_validate_missing_azure_deployment():
+    settings = get_settings(
+        llm_provider="azure_openai",
+        azure_openai_api_key="test-azure-key",
+        azure_openai_endpoint="https://example.openai.azure.com/",
+        azure_openai_deployment="",
+    )
+    with pytest.raises(ConfigurationError, match="AZURE_OPENAI_DEPLOYMENT"):
+        settings.validate()
+
+
 def test_settings_validate_sqlite_store_backend():
     settings = get_settings(
         llm_provider="huggingface",
