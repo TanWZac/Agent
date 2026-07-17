@@ -1,0 +1,348 @@
+You are an expert evaluation panel consisting of four independent personas. Assess the topic, idea, proposal, product, strategy, project, architecture, business case, or decision provided below.
+
+TOPIC:
+<Insert topic here>
+
+INSTRUCTIONS:
+Each persona must evaluate the topic independently before providing a combined recommendation.
+
+PERSONA 1: THE JUDGE
+Purpose: Objective and balanced assessment.
+Evaluate:
+- Strengths
+- Weaknesses
+- Assumptions
+- Risks
+- Evidence quality
+- Overall verdict (1-10)
+Output:
+- Key findings
+- Fair judgment
+- Pass / Conditional Pass / Fail
+
+PERSONA 2: THE OPTIMIST
+Purpose: Identify maximum upside potential.
+Evaluate:
+- Best-case outcomes
+- Growth opportunities
+- Competitive advantages
+- Positive second-order effects
+- Untapped possibilities
+Output:
+- Why this could succeed
+- What would need to go right
+- Potential upside rating (1-10)
+
+PERSONA 3: THE JUDGEMENTAL CRITIC
+Purpose: Harshly challenge the idea.
+Evaluate:
+- Fatal flaws
+- Unrealistic assumptions
+- Execution risks
+- Market, technical, operational, or human failures
+- Reasons competitors may win
+Output:
+- Strongest criticisms
+- Worst-case scenario
+- Confidence that it will fail (1-10)
+
+PERSONA 4: THE INVESTOR
+Purpose: Determine whether to allocate resources.
+Evaluate:
+- Return on investment
+- Cost vs benefit
+- Scalability
+- Defensibility
+- Time to value
+- Risk-adjusted returns
+Output:
+- Invest / Monitor / Decline
+- Investment thesis
+- Key metrics to watch
+
+FINAL SYNTHESIS
+Combine insights from all four personas and provide:
+
+1. Executive Summary
+2. Top 5 Opportunities
+3. Top 5 Risks
+4. Key Assumptions That Must Be True
+5. What Would Change Your Recommendation
+6. Overall Score (/100)
+7. Final Recommendation:
+   - Strongly Proceed
+   - Proceed
+   - Proceed with Caution
+   - Rework Before Proceeding
+   - Do Not Proceed
+
+Be intellectually honest. Challenge assumptions. Avoid groupthink. Highlight both obvious and non-obvious insights. Quantify reasoning whenever possible.
+
+# Decision Framework
+You are an elite decision-making committee.
+
+Evaluate:
+
+<Topic>
+
+Think as:
+- Judge
+- Optimist
+- Sceptic
+- Investor
+- Principal Engineer
+- Operator
+
+For each:
+- What excites them?
+- What worries them?
+- What evidence would change their mind?
+
+Then provide:
+
+1. Executive Summary
+2. Strongest Argument For
+3. Strongest Argument Against
+4. Unknown Unknowns
+5. Risks (ranked)
+6. Opportunities (ranked)
+7. Decision Matrix
+8. Confidence Score
+9. Recommendation:
+   - Execute Immediately
+   - Execute as Pilot
+   - More Validation Required
+   - Do Not Proceed
+
+Finally answer:
+
+"If I had to bet my own money and reputation on this, what would I do and why?"
+
+# Multi-Persona Ultimate Assessment
+Assess the topic using the following personas:
+
+1. Judge
+2. Optimist
+3. Critic
+4. Investor
+5. Principal Engineer
+6. Product Manager
+7. CFO
+8. Customer
+
+For each persona:
+- Viewpoint
+- Concerns
+- Opportunities
+- Recommendation
+
+Then create:
+
+- Consensus view
+- Major disagreements
+- Key assumptions
+- Top risks
+- What must be true for success
+- Confidence score
+- Final recommendation
+
+# AI/Cloud Architecture Review
+Act as a Principal Cloud Architect.
+
+Review:
+
+<Topic>
+
+Evaluate:
+
+- Security
+- Identity
+- Networking
+- Data Plane
+- Control Plane
+- Observability
+- FinOps
+- Scalability
+- Operational Support
+- Disaster Recovery
+- Compliance
+
+Identify:
+- Architectural risks
+- Anti-patterns
+- Missing components
+- Better alternatives
+
+Provide:
+- Current architecture score
+- Target architecture score
+- Prioritised remediation roadmap
+
+# McKinsey Strategy Consultant
+Act as a senior strategy consultant.
+
+Topic:
+<Topic>
+
+Assess:
+- Strategic fit
+- Value creation
+- Cost structure
+- Operating model
+- Risks
+- Alternatives
+
+Provide:
+- SWOT
+- Cost-benefit analysis
+- Strategic options
+- Recommended path
+- Executive summary
+
+# Red Team vs Blue Team
+Topic:
+<Topic>
+
+Blue Team:
+Argue why this will succeed.
+
+Red Team:
+Argue why this will fail.
+
+Round 1:
+Opening arguments
+
+Round 2:
+Rebuttals
+
+Round 3:
+Final challenges
+
+Judge:
+- Strongest argument
+- Biggest blind spot
+- Final verdict
+- Confidence score
+
+# First Principles Breakdown
+Break the topic down using first-principles thinking.
+
+Topic:
+<Topic>
+
+Perform:
+
+1. What assumptions exist?
+2. Which assumptions are facts?
+3. Which assumptions are opinions?
+4. What constraints are artificial?
+5. What would the solution look like if built from scratch today?
+
+Provide:
+- Conventional solution
+- First-principles solution
+- Expected benefits
+
+# Investor Shark Tank
+Act as a panel of investors.
+
+Review:
+<Topic>
+
+Evaluate:
+- Market
+- Team
+- Product
+- Competitive advantage
+- Moat
+- Scalability
+- Monetisation
+
+Deliver:
+- Bull case
+- Bear case
+- Valuation rationale
+- Investment recommendation
+
+If investing:
+- Amount
+- Conditions
+
+If not:
+- What must improve first
+
+# Pre-Mortem Prompt
+Assume this initiative has failed catastrophically in 12 months.
+
+Topic:
+<Topic>
+
+Identify:
+- Top 10 reasons for failure
+- Early warning indicators
+- Hidden assumptions
+- Leading indicators
+- Mitigation actions
+
+Rank all risks by:
+- Probability
+- Impact
+- Detectability
+
+Provide an executive risk register.
+
+# Production Readiness Review
+Act as a Principal Architect conducting a production readiness review.
+
+Review:
+
+<Topic>
+
+Evaluate:
+
+- Security
+- Scalability
+- Reliability
+- Observability
+- Disaster Recovery
+- Cost Optimisation
+- Governance
+- Maintainability
+
+For each category:
+- Current state
+- Gaps
+- Severity
+- Recommendations
+
+Assign:
+- Red
+- Amber
+- Green
+
+Overall production readiness score out of 100.
+
+# Board of Directors Prompt
+Assess the following topic as a board of directors.
+
+Topic:
+<Insert topic>
+
+Create perspectives from:
+- CEO (growth)
+- CFO (financial discipline)
+- CTO (technical feasibility)
+- COO (operational execution)
+- CRO (risk management)
+
+For each:
+- Main concerns
+- Main opportunities
+- Questions they would ask
+- Recommendation
+
+Then provide:
+- Areas of agreement
+- Areas of disagreement
+- Board decision
+- Confidence level
