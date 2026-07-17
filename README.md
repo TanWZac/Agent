@@ -105,6 +105,10 @@ cp .env.example .env
 # Edit .env and set credentials for your selected provider
 ```
 
+Additional guide:
+
+- `docs/FREE_CLAUDE_CODE_SETUP.md` for GitHub setup patterns, Azure AI Foundry configuration, and OpenRouter with Nemotron 3 Ultra.
+
 ## Usage
 
 ### CLI Mode
